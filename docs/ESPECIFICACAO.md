@@ -17,6 +17,8 @@ repetitivas de **um** Alojamento Local em **Almada**, com reservas pelo
 | Pagamentos | O Booking cobra ao hóspede e transfere para o titular |
 | Taxa turística | O Booking cobra ao hóspede; o titular declara e entrega à CM Almada |
 | Balcão Virtual Almada | Estabelecimento já inscrito |
+| Cofre das chaves | Código fixo |
+| Alojamento da app | Cloudflare Workers + D1 (plano gratuito) |
 
 ## 2. Regras legais
 
@@ -83,6 +85,8 @@ repetitivas de **um** Alojamento Local em **Almada**, com reservas pelo
 - Revelado apenas quando o **titular da reserva** completou o formulário e
   falta menos de N horas para o check-in (configurável, ex.: 24 h).
 - Guardado cifrado; mostrado na página do hóspede (não enviado em texto livre).
+- O cofre atual tem **código fixo**: a app mostra sempre o mesmo código
+  (segredo `CODIGO_CHAVES`). Ao mudar o código no cofre, atualizar o segredo.
 - Recomendação: mudar o código regularmente (idealmente por reserva).
   Um cofre/fechadura com códigos temporários (ex.: PIN válido só entre
   check-in e check-out) elimina o risco de o código ficar conhecido.

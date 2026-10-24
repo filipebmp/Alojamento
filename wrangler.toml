@@ -1,0 +1,25 @@
+name = "gestao-alojamento-local"
+main = "src/index.ts"
+compatibility_date = "2025-10-01"
+
+[assets]
+directory = "public"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "alojamento"
+database_id = "SUBSTITUIR_PELO_ID_DA_BASE_DE_DADOS"
+migrations_dir = "migrations"
+
+[vars]
+# Horas antes da hora de check-in a partir das quais o código das chaves fica visível
+HORAS_ANTES_CODIGO = "24"
+# Hora de check-in (hora de Lisboa)
+HORA_CHECKIN = "15:00"
+# Horas após o check-in para os restantes hóspedes preencherem os dados
+HORAS_PRAZO_HOSPEDES = "48"
+
+# Segredos (definir com `wrangler secret put NOME`, ou em .dev.vars localmente):
+#   ADMIN_PASSWORD  - palavra-passe de acesso ao painel
+#   SESSION_SECRET  - chave para assinar o cookie de sessão
+#   CODIGO_CHAVES   - código do cofre das chaves

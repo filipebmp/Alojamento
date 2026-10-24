@@ -1,0 +1,3 @@
+ADMIN_PASSWORD=muda-isto
+SESSION_SECRET=uma-chave-longa-e-aleatoria
+CODIGO_CHAVES=1234

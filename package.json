@@ -1,0 +1,22 @@
+{
+  "name": "gestao-alojamento-local",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "db:migrate:local": "wrangler d1 migrations apply alojamento --local",
+    "db:migrate": "wrangler d1 migrations apply alojamento --remote",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "hono": "4.13.13"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "4.20251106.1",
+    "typescript": "5.9.3",
+    "vitest": "4.0.5",
+    "wrangler": "4.45.0"
+  }
+}
