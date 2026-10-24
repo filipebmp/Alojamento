@@ -19,7 +19,14 @@ Ver [docs/ESPECIFICACAO.md](docs/ESPECIFICACAO.md).
   resumo mensal para o Balcão Virtual.
 - Feriados nacionais e fins de semana considerados nos prazos em dias úteis.
 
-## Instalação (Cloudflare, plano gratuito)
+## Publicação automática (GitHub Actions)
+
+Cada push para `main` corre os testes e publica no Cloudflare. Segredos necessários
+em *Settings → Secrets and variables → Actions*: `CLOUDFLARE_API_TOKEN`,
+`CLOUDFLARE_ACCOUNT_ID`, `ADMIN_PASSWORD`, `SESSION_SECRET`, `CODIGO_CHAVES`.
+A base de dados D1 é criada automaticamente na primeira publicação.
+
+## Instalação manual (Cloudflare, plano gratuito)
 
 ```sh
 npm install
