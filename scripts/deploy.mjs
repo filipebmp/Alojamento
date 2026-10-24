@@ -19,6 +19,16 @@ if (faltam.length) {
   process.exit(1);
 }
 
+// Aceita o Account ID sozinho ou colado dentro do endereço do dashboard.
+if (process.env.CLOUDFLARE_ACCOUNT_ID) {
+  const id = process.env.CLOUDFLARE_ACCOUNT_ID.match(/[0-9a-f]{32}/i)?.[0];
+  if (!id) {
+    console.error("CLOUDFLARE_ACCOUNT_ID inválido: deve ter 32 letras/números (ver o endereço dash.cloudflare.com/<id>).");
+    process.exit(1);
+  }
+  process.env.CLOUDFLARE_ACCOUNT_ID = id;
+}
+
 const wrangler = (...args) => execFileSync("npx", ["wrangler", ...args], { encoding: "utf8", stdio: ["pipe", "pipe", "inherit"] });
 
 let bases = JSON.parse(wrangler("d1", "list", "--json"));
