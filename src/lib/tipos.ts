@@ -51,3 +51,11 @@ export interface Config {
   horaCheckin: string;
   horasPrazoHospedes: number;
 }
+
+export interface Passo {
+  id: number;
+  ordem: number;
+  texto: string;
+  tem_imagem: number;
+  atualizado_em: string;
+}

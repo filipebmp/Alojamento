@@ -1,11 +1,27 @@
 import { type Context, Hono } from "hono";
 import { deleteCookie, getSignedCookie, setSignedCookie } from "hono/cookie";
-import { gerarToken, listarDeclaracoesTmt, listarReservas, obterReserva, obterReservaPorToken } from "./db";
+import {
+  gerarToken,
+  listarDeclaracoesTmt,
+  listarPassos,
+  listarReservas,
+  obterImagemPasso,
+  obterReserva,
+  obterReservaPorToken,
+} from "./db";
 import { hojeLisboa } from "./lib/datas";
 import { estadoCodigo, mesesAteAnterior, ordenarPendentes, pendentesReserva, pendentesTmt } from "./lib/regras";
 import { calcularTmt } from "./lib/tmt";
 import type { Config } from "./lib/tipos";
-import { type ResumoMesTmt, paginaLogin, paginaNovaReserva, paginaPainel, paginaReserva, paginaTmt } from "./views/admin";
+import {
+  type ResumoMesTmt,
+  paginaInstrucoes,
+  paginaLogin,
+  paginaNovaReserva,
+  paginaPainel,
+  paginaReserva,
+  paginaTmt,
+} from "./views/admin";
 import { paginaHospede } from "./views/hospede";
 
 type Env = {
@@ -19,6 +35,7 @@ type Env = {
 };
 
 const COOKIE = "sessao";
+const MAX_IMAGEM = 1_500_000;
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -183,6 +200,75 @@ app.post("/admin/tmt/:mes/:acao{declarado|pago}", async (c) => {
   return c.redirect("/admin/tmt");
 });
 
+// ---------- Instruções de chegada ----------
+
+app.get("/admin/instrucoes", async (c) => c.html(paginaInstrucoes(await listarPassos(c.env.DB))));
+
+// Devolve [bytes, tipo] da foto enviada, null se não houver, ou uma mensagem de erro.
+async function lerImagem(valor: unknown): Promise<[ArrayBuffer, string] | null | string> {
+  if (!(valor instanceof File) || valor.size === 0) return null;
+  if (!valor.type.startsWith("image/")) return "O ficheiro tem de ser uma imagem.";
+  if (valor.size > MAX_IMAGEM) return "Foto demasiado grande (máx. 1,5 MB).";
+  return [await valor.arrayBuffer(), valor.type];
+}
+
+app.post("/admin/instrucoes", async (c) => {
+  const b = await c.req.parseBody();
+  const imagem = await lerImagem(b.imagem);
+  const texto = String(b.texto ?? "").trim();
+  if (typeof imagem === "string") return c.html(paginaInstrucoes(await listarPassos(c.env.DB), imagem), 400);
+  if (!imagem && !texto) return c.html(paginaInstrucoes(await listarPassos(c.env.DB), "Adicione uma foto ou um texto."), 400);
+  await c.env.DB.prepare(
+    `INSERT INTO passos (ordem, texto, imagem, imagem_tipo, atualizado_em)
+     VALUES ((SELECT COALESCE(MAX(ordem), 0) + 1 FROM passos), ?, ?, ?, ?)`,
+  )
+    .bind(texto, imagem?.[0] ?? null, imagem?.[1] ?? null, new Date().toISOString())
+    .run();
+  return c.redirect("/admin/instrucoes");
+});
+
+app.post("/admin/instrucoes/:id", async (c) => {
+  const id = Number(c.req.param("id"));
+  const b = await c.req.parseBody();
+  const imagem = await lerImagem(b.imagem);
+  if (typeof imagem === "string") return c.html(paginaInstrucoes(await listarPassos(c.env.DB), imagem), 400);
+  const agora = new Date().toISOString();
+  const texto = String(b.texto ?? "").trim();
+  await (imagem
+    ? c.env.DB.prepare("UPDATE passos SET texto = ?, imagem = ?, imagem_tipo = ?, atualizado_em = ? WHERE id = ?")
+        .bind(texto, imagem[0], imagem[1], agora, id)
+    : c.env.DB.prepare("UPDATE passos SET texto = ?, atualizado_em = ? WHERE id = ?").bind(texto, agora, id)
+  ).run();
+  return c.redirect("/admin/instrucoes");
+});
+
+app.post("/admin/instrucoes/:id/mover", async (c) => {
+  const id = Number(c.req.param("id"));
+  const passos = await listarPassos(c.env.DB);
+  const i = passos.findIndex((p) => p.id === id);
+  const j = i + (c.req.query("dir") === "-1" ? -1 : 1);
+  if (i >= 0 && j >= 0 && j < passos.length) {
+    [passos[i], passos[j]] = [passos[j], passos[i]];
+    await c.env.DB.batch(passos.map((p, ordem) => c.env.DB.prepare("UPDATE passos SET ordem = ? WHERE id = ?").bind(ordem + 1, p.id)));
+  }
+  return c.redirect("/admin/instrucoes");
+});
+
+app.post("/admin/instrucoes/:id/apagar", async (c) => {
+  await c.env.DB.prepare("DELETE FROM passos WHERE id = ?").bind(Number(c.req.param("id"))).run();
+  return c.redirect("/admin/instrucoes");
+});
+
+async function responderImagem(db: D1Database, id: number) {
+  const img = await obterImagemPasso(db, id);
+  if (!img) return new Response("Not found", { status: 404 });
+  return new Response(img.bytes, {
+    headers: { "Content-Type": img.tipo, "Cache-Control": "private, max-age=86400" },
+  });
+}
+
+app.get("/admin/instrucoes/:id/imagem", (c) => responderImagem(c.env.DB, Number(c.req.param("id"))));
+
 // ---------- Página do hóspede ----------
 
 async function renderHospede(c: Context<{ Bindings: Env }>, token: string, erro?: string) {
@@ -190,13 +276,23 @@ async function renderHospede(c: Context<{ Bindings: Env }>, token: string, erro?
   if (!rc) return null;
   const cfg = config(c.env);
   const estado = estadoCodigo(rc.reserva, rc.hospedes, rc.faturacao, cfg, new Date());
-  return c.html(paginaHospede(rc, estado, c.env.CODIGO_CHAVES, cfg, erro), erro ? 400 : 200);
+  const passos = estado === "disponivel" ? await listarPassos(c.env.DB) : [];
+  return c.html(paginaHospede(rc, estado, c.env.CODIGO_CHAVES, passos, cfg, erro), erro ? 400 : 200);
 }
 
 app.get("/c/:token", async (c) => {
   c.header("Cache-Control", "no-store");
   c.header("Referrer-Policy", "no-referrer");
   return (await renderHospede(c, c.req.param("token"))) ?? c.notFound();
+});
+
+// As fotos mostram onde está o cofre: só são servidas quando o código está disponível.
+app.get("/c/:token/passo/:id", async (c) => {
+  const rc = await obterReservaPorToken(c.env.DB, c.req.param("token"));
+  if (!rc || estadoCodigo(rc.reserva, rc.hospedes, rc.faturacao, config(c.env), new Date()) !== "disponivel") {
+    return c.notFound();
+  }
+  return responderImagem(c.env.DB, Number(c.req.param("id")));
 });
 
 app.post("/c/:token/titular", async (c) => {

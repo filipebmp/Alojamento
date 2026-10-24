@@ -1,4 +1,4 @@
-import type { DeclaracaoTmt, Faturacao, Hospede, Reserva } from "./lib/tipos";
+import type { DeclaracaoTmt, Faturacao, Hospede, Passo, Reserva } from "./lib/tipos";
 
 export interface ReservaCompleta {
   reserva: Reserva;
@@ -45,4 +45,22 @@ export async function listarReservas(db: D1Database): Promise<ReservaCompleta[]>
 
 export async function listarDeclaracoesTmt(db: D1Database): Promise<DeclaracaoTmt[]> {
   return (await db.prepare("SELECT * FROM declaracoes_tmt").all<DeclaracaoTmt>()).results;
+}
+
+export async function listarPassos(db: D1Database): Promise<Passo[]> {
+  return (
+    await db
+      .prepare("SELECT id, ordem, texto, imagem IS NOT NULL AS tem_imagem, atualizado_em FROM passos ORDER BY ordem, id")
+      .all<Passo>()
+  ).results;
+}
+
+export async function obterImagemPasso(db: D1Database, id: number) {
+  const row = await db
+    .prepare("SELECT imagem, imagem_tipo, atualizado_em FROM passos WHERE id = ? AND imagem IS NOT NULL")
+    .bind(id)
+    .first<{ imagem: ArrayBuffer | number[]; imagem_tipo: string; atualizado_em: string }>();
+  if (!row) return null;
+  // O D1 pode devolver BLOBs como ArrayBuffer ou como array de bytes.
+  return { bytes: new Uint8Array(row.imagem), tipo: row.imagem_tipo, versao: row.atualizado_em };
 }

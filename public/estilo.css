@@ -47,3 +47,12 @@ th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--bord
 dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 8px 0; }
 dt { color: var(--suave); }
 dd { margin: 0; overflow-wrap: anywhere; }
+textarea { display: block; width: 100%; margin-top: 4px; padding: 10px; font: inherit; color: inherit;
+  background: var(--cartao); border: 1px solid var(--borda); border-radius: 8px; resize: vertical; }
+button:disabled { opacity: .5; }
+.passos { padding: 0; list-style: none; counter-reset: passo; }
+.passos li { counter-increment: passo; }
+.passos li::before { content: counter(passo); display: inline-block; min-width: 1.8em; text-align: center; font-weight: 700;
+  color: #fff; background: var(--marca); border-radius: 999px; margin-bottom: 8px; }
+.passos img, .passo-admin img { display: block; width: 100%; height: auto; border-radius: 8px; }
+.passos p { margin: 8px 0 0; white-space: pre-line; }

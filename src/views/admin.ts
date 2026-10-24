@@ -3,7 +3,7 @@ import type { ReservaCompleta } from "../db";
 import { hojeLisboa } from "../lib/datas";
 import { type Pendente, eEstrangeiro, euros, hospedeCompleto, prazosTmt } from "../lib/regras";
 import { calcularTmt } from "../lib/tmt";
-import type { DeclaracaoTmt } from "../lib/tipos";
+import type { DeclaracaoTmt, Passo } from "../lib/tipos";
 import { dataPt, pagina } from "./layout";
 
 export function paginaLogin(erro?: string) {
@@ -190,6 +190,66 @@ export function paginaTmt(resumos: ResumoMesTmt[]) {
         </div>
       </section>`;
     })}`, { admin: true });
+}
+
+// Reduz as fotos no telemóvel antes do envio (máx. 1600 px, JPEG) para caberem na base de dados.
+const SCRIPT_REDIMENSIONAR = html`<script>
+document.querySelectorAll("input[data-redimensionar]").forEach((input) => {
+  input.addEventListener("change", async () => {
+    const ficheiro = input.files[0];
+    if (!ficheiro) return;
+    const botao = input.form.querySelector("button[type=submit]");
+    botao.disabled = true;
+    try {
+      const img = await createImageBitmap(ficheiro);
+      const escala = Math.min(1, 1600 / Math.max(img.width, img.height));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.round(img.width * escala);
+      canvas.height = Math.round(img.height * escala);
+      canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
+      const blob = await new Promise((ok) => canvas.toBlob(ok, "image/jpeg", 0.8));
+      const dt = new DataTransfer();
+      dt.items.add(new File([blob], "foto.jpg", { type: "image/jpeg" }));
+      input.files = dt.files;
+    } catch (e) {
+      console.error(e);
+    } finally {
+      botao.disabled = false;
+    }
+  });
+});
+</script>`;
+
+export function paginaInstrucoes(passos: Passo[], erro?: string) {
+  const ultimo = passos.length - 1;
+  return pagina("Instruções de chegada", html`<h1>Instruções de chegada</h1>
+    <p class="nota">Aparecem ao hóspede por baixo do código do cofre, só quando o código fica disponível.
+      Sugestão: escreve cada texto em português e inglês.</p>
+    ${erro ? html`<p class="erro">${erro}</p>` : ""}
+    ${passos.map((p, i) => html`<section class="cartao passo-admin">
+      <h2>Passo ${i + 1}</h2>
+      ${p.tem_imagem ? html`<img src="/admin/instrucoes/${p.id}/imagem?v=${encodeURIComponent(p.atualizado_em)}" alt="">` : ""}
+      <form method="post" action="/admin/instrucoes/${p.id}" enctype="multipart/form-data">
+        <label>Texto <textarea name="texto" rows="3">${p.texto}</textarea></label>
+        <label>Substituir foto <input type="file" name="imagem" accept="image/*" data-redimensionar></label>
+        <button type="submit">Guardar</button>
+      </form>
+      <div class="botoes">
+        ${i > 0 ? html`<form method="post" action="/admin/instrucoes/${p.id}/mover?dir=-1"><button>↑ Subir</button></form>` : ""}
+        ${i < ultimo ? html`<form method="post" action="/admin/instrucoes/${p.id}/mover?dir=1"><button>↓ Descer</button></form>` : ""}
+        <form method="post" action="/admin/instrucoes/${p.id}/apagar" onsubmit="return confirm('Apagar este passo?')">
+          <button class="perigo">Apagar</button></form>
+      </div>
+    </section>`)}
+    <section class="cartao">
+      <h2>Novo passo</h2>
+      <form method="post" action="/admin/instrucoes" enctype="multipart/form-data">
+        <label>Foto <input type="file" name="imagem" accept="image/*" data-redimensionar></label>
+        <label>Texto <textarea name="texto" rows="3" placeholder="Ex.: O cofre está à direita da porta. / The key box is to the right of the door."></textarea></label>
+        <button type="submit">Adicionar</button>
+      </form>
+    </section>
+    ${SCRIPT_REDIMENSIONAR}`, { admin: true });
 }
 
 function centsParaInput(cents: number): string {
