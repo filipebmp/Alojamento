@@ -159,7 +159,10 @@ app.get("/admin/tmt", async (c) => {
     return {
       mes,
       hospedes: calculos.reduce((s, t) => s + t.hospedesTributaveis, 0),
+      dormidasTotais: calculos.reduce((s, t) => s + t.dormidasTotais, 0),
       dormidas: calculos.reduce((s, t) => s + t.dormidasTributaveis, 0),
+      dormidasAcimaLimite: calculos.reduce((s, t) => s + t.dormidasAcimaLimite, 0),
+      dormidasMenores: calculos.reduce((s, t) => s + t.dormidasMenores, 0),
       valorCents: calculos.reduce((s, t) => s + t.valorCents, 0),
       semDados: doMes.filter((rc) => rc.hospedes.length < rc.reserva.n_hospedes).length,
       declaracao: declaracoes.find((d) => d.mes === mes),

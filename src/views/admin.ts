@@ -128,7 +128,9 @@ export function paginaReserva(rc: ReservaCompleta, linkHospede: string, pendente
 
     <section class="cartao">
       <h2>Taxa turística</h2>
-      <p>Devida: <strong>${euros(tmt.valorCents)}</strong> (${tmt.hospedesTributaveis} hóspede(s) × ${tmt.noites} noite(s) × 2 €)
+      <p>Devida: <strong>${euros(tmt.valorCents)}</strong> (${tmt.hospedesTributaveis} hóspede(s) × ${tmt.noites} noite(s) × 2 €)<br>
+        Dormidas: ${tmt.dormidasTotais} totais · ${tmt.dormidasTributaveis} tributáveis ·
+        ${tmt.dormidasAcimaLimite} não sujeitas (além de 5 noites) · ${tmt.dormidasMenores} isentas (menores)
         ${hospedes.length < r.n_hospedes ? html`<br><small>Provisório: faltam hóspedes.</small>` : ""}</p>
       <p>Cobrada pelo Booking: ${r.tmt_cobrada_cents == null ? "—" : euros(r.tmt_cobrada_cents)}</p>
     </section>
@@ -154,7 +156,10 @@ export function paginaReserva(rc: ReservaCompleta, linkHospede: string, pendente
 export interface ResumoMesTmt {
   mes: string;
   hospedes: number;
+  dormidasTotais: number;
   dormidas: number;
+  dormidasAcimaLimite: number;
+  dormidasMenores: number;
   valorCents: number;
   semDados: number;
   declaracao: DeclaracaoTmt | undefined;
@@ -164,11 +169,15 @@ export function paginaTmt(resumos: ResumoMesTmt[]) {
   return pagina("Taxa turística", html`<h1>Taxa municipal turística</h1>
     <p class="nota">Declarar no <a href="https://www.cm-almada.pt/inscricao-de-estabelecimentos" target="_blank" rel="noopener">Balcão Virtual da CM Almada</a>
       todos os meses, mesmo sem dormidas. Estadias contadas no mês do check-in.</p>
-    ${resumos.map(({ mes, hospedes, dormidas, valorCents, semDados, declaracao: d }) => {
+    ${resumos.map(({ mes, hospedes, dormidasTotais, dormidas, dormidasAcimaLimite, dormidasMenores, valorCents, semDados, declaracao: d }) => {
       const prazos = prazosTmt(mes);
       return html`<section class="cartao">
         <h2>${mes}</h2>
-        <dl><dt>Hóspedes tributáveis</dt><dd>${hospedes}</dd><dt>Dormidas tributáveis</dt><dd>${dormidas}</dd>
+        <dl><dt>Hóspedes tributáveis</dt><dd>${hospedes}</dd>
+          <dt>Dormidas totais</dt><dd>${dormidasTotais}</dd>
+          <dt>Dormidas tributáveis</dt><dd>${dormidas}</dd>
+          <dt>Não sujeitas (além de 5 noites)</dt><dd>${dormidasAcimaLimite}</dd>
+          <dt>Isentas (menores de 13)</dt><dd>${dormidasMenores}</dd>
           <dt>Valor</dt><dd><strong>${euros(valorCents)}</strong></dd></dl>
         ${semDados ? html`<p class="erro">⚠️ ${semDados} reserva(s) sem todos os hóspedes registados: valores incompletos.</p>` : ""}
         <div class="botoes">
