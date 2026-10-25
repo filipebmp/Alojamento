@@ -7,6 +7,8 @@ routes = [
   { pattern = "bookgest.pt", custom_domain = true },
   { pattern = "www.bookgest.pt", custom_domain = true },
 ]
+# Mantém também o endereço workers.dev (usado pelo webhook do Stripe e pelas instalações já criadas).
+workers_dev = true
 
 [assets]
 directory = "public"

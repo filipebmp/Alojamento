@@ -6,7 +6,7 @@ import { readdirSync, readFileSync } from "node:fs";
 
 const [pacote] = process.argv.slice(2);
 const chavePrivada = process.env.BOOKGEST_CHAVE_ASSINATURA;
-const plataforma = process.env.URL_PLATAFORMA || "https://bookgest-plataforma.filipebmp.workers.dev";
+const plataforma = process.env.URL_PLATAFORMA || "https://bookgest.pt";
 
 if (!chavePrivada) {
   console.log("::warning::BOOKGEST_CHAVE_ASSINATURA não definido: versão não publicada (sem atualizações automáticas).");

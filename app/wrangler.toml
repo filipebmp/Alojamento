@@ -4,6 +4,8 @@ compatibility_date = "2025-10-01"
 
 # Instalação do fornecedor: domínio próprio no Cloudflare (o registo DNS é criado na publicação).
 routes = [{ pattern = "painel.bookgest.pt", custom_domain = true }]
+# Mantém também o endereço workers.dev (com domínio próprio, o wrangler desliga-o por omissão).
+workers_dev = true
 
 [[d1_databases]]
 binding = "DB"
