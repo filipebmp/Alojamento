@@ -151,7 +151,11 @@ export function paginaLicencas(linhas: { licenca: Licenca; cliente: Cliente | nu
           <td>${dataPt(l.ultima_comunicacao)}</td>
           <td>${l.tipo === "cortesia"
             ? html`<form method="post" action="/gestao/licencas/${l.id}/${l.revogada ? "reativar" : "revogar"}">
-                <button class="${l.revogada ? "" : "perigo"} pequeno">${l.revogada ? "Reativar" : "Revogar"}</button></form>`
+                <button class="${l.revogada ? "" : "perigo"} pequeno">${l.revogada ? "Reativar" : "Revogar"}</button></form>
+              ${l.ultima_comunicacao
+                ? ""
+                : html`<form method="post" action="/gestao/licencas/${l.id}/apagar" onsubmit="return confirm('Apagar esta licença?')">
+                    <button class="perigo pequeno">Apagar</button></form>`}`
             : ""}</td>
         </tr>`;
       })}

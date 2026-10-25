@@ -315,9 +315,9 @@ const NOMES_ESTADO_LICENCA = { ativa: "ativa", pagamento_em_atraso: "pagamento e
 export function paginaDefinicoes(opcoes: {
   erro?: string;
   guardado?: boolean;
-  licenca: { chave: string | null; estado: EstadoGuardado | null; aviso: string | null };
+  licenca: { chave: string | null; estado: EstadoGuardado | null; erro: string | null; aviso: string | null };
 }) {
-  const { chave, estado, aviso } = opcoes.licenca;
+  const { chave, estado, erro, aviso } = opcoes.licenca;
   return pagina("Definições", html`<h1>Definições</h1>
     ${opcoes.guardado ? html`<p>✅ Palavra-passe alterada. As sessões noutros dispositivos foram terminadas.</p>` : ""}
     ${opcoes.erro ? html`<p class="erro">${opcoes.erro}</p>` : ""}
@@ -327,6 +327,7 @@ export function paginaDefinicoes(opcoes: {
         ? html`<p>Estado: <strong>${NOMES_ESTADO_LICENCA[estado.estado]}</strong> · ${estado.alojamentosPagos} alojamento(s) incluído(s)<br>
             <small>Verificada em ${dataPt(estado.verificadoEm)}</small></p>`
         : chave ? html`<p class="nota">Ainda não foi possível verificar a licença.</p>` : ""}
+      ${chave && erro ? html`<p class="nota">Última tentativa falhou: ${erro}</p>` : ""}
       ${aviso ? html`<p class="erro">${aviso}</p>` : ""}
       <form method="post" action="/admin/definicoes/licenca">
         <label>Chave de licença <input name="chave" required value="${chave ?? ""}" placeholder="BG-XXXX-XXXX-XXXX-XXXX" autocapitalize="characters"></label>

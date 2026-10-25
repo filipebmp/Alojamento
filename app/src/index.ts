@@ -47,6 +47,7 @@ type Env = {
   CODIGO_CHAVES?: string;
   URL_PUBLICO?: string;
   URL_LICENCAS?: string; // servidor de licenças (predefinido: https://bookgest.pt)
+  PLATAFORMA?: Fetcher; // ligação direta à plataforma, só na instalação do fornecedor (mesma conta Cloudflare)
 };
 
 type Ctx = Context<{ Bindings: Env }>;
@@ -475,9 +476,13 @@ app.post("/admin/definicoes/licenca", async (c) => {
 
 // ---------- Licença ----------
 
-async function lerLicenca(db: D1Database): Promise<{ chave: string | null; estado: EstadoGuardado | null }> {
-  const [chave, estado] = await Promise.all([lerDefinicao(db, "licenca_chave"), lerDefinicao(db, "licenca_estado")]);
-  return { chave, estado: estado ? (JSON.parse(estado) as EstadoGuardado) : null };
+async function lerLicenca(db: D1Database): Promise<{ chave: string | null; estado: EstadoGuardado | null; erro: string | null }> {
+  const [chave, estado, erro] = await Promise.all([
+    lerDefinicao(db, "licenca_chave"),
+    lerDefinicao(db, "licenca_estado"),
+    lerDefinicao(db, "licenca_erro"),
+  ]);
+  return { chave, estado: estado ? (JSON.parse(estado) as EstadoGuardado) : null, erro };
 }
 
 // Corre uma vez por dia (cron) e ao guardar a chave. Sem resposta, mantém o último estado conhecido.
@@ -486,11 +491,13 @@ async function verificarLicenca(env: Env): Promise<void> {
   if (!chave) return;
   const alojamentos = (await env.DB.prepare("SELECT COUNT(*) AS n FROM alojamentos WHERE ativo = 1").first<number>("n")) ?? 0;
   try {
-    const r = await consultarLicenca(env.URL_LICENCAS || URL_LICENCAS_PREDEFINIDO, { chave, versao: VERSAO, alojamentos });
+    const r = await consultarLicenca(env.URL_LICENCAS || URL_LICENCAS_PREDEFINIDO, { chave, versao: VERSAO, alojamentos }, env.PLATAFORMA);
     const guardado: EstadoGuardado = { estado: r.estado, alojamentosPagos: r.alojamentosPagos, verificadoEm: new Date().toISOString() };
     await gravarDefinicao(env.DB, "licenca_estado", JSON.stringify(guardado));
+    await env.DB.prepare("DELETE FROM definicoes WHERE chave = 'licenca_erro'").run();
   } catch (e) {
     console.error("Verificação da licença falhou", e);
+    await gravarDefinicao(env.DB, "licenca_erro", String(e).slice(0, 300));
   }
 }
 

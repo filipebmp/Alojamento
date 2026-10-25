@@ -21,6 +21,12 @@ URL_PUBLICO = "https://bookgest.pt"
 # Servidor de licenças. Predefinido: https://bookgest.pt (quando a plataforma passar a servir esse domínio).
 URL_LICENCAS = "https://bookgest-plataforma.filipebmp.workers.dev"
 
+# Só na instalação do fornecedor: a plataforma está na mesma conta Cloudflare e o Cloudflare não deixa
+# um Worker chamar outro pelo endereço workers.dev (erro 1042). A ligação direta resolve isso.
+[[services]]
+binding = "PLATAFORMA"
+service = "bookgest-plataforma"
+
 # A restante configuração (palavra-passe, alojamentos, código do cofre, horários,
 # taxa turística) é feita no painel e guardada na base de dados.
 # Segredos opcionais, só para instalações anteriores à configuração no painel

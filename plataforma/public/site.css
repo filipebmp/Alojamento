@@ -21,7 +21,7 @@ input { display: block; width: 100%; margin-top: 4px; padding: 10px; font: inher
 button, .botao { display: inline-block; padding: 10px 16px; font: inherit; font-weight: 600; color: #fff; background: var(--marca);
   border: 0; border-radius: 8px; cursor: pointer; text-decoration: none; margin-top: 8px; }
 button.perigo { background: var(--erro); }
-button.pequeno { padding: 4px 10px; font-size: .85rem; margin: 0; }
+button.pequeno { padding: 4px 10px; font-size: .85rem; margin: 0 0 4px; }
 .botao.grande { padding: 14px 24px; font-size: 1.1rem; }
 .linha { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; }
 .linha label { margin: 0; }

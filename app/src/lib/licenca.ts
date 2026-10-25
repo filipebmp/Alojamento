@@ -8,12 +8,15 @@ export interface EstadoGuardado extends RespostaLicenca {
 }
 
 // Pergunta ao servidor de licenças pelo estado da chave. Envia só chave, versão e n.º de alojamentos ativos.
-export async function consultarLicenca(urlBase: string, pedido: PedidoLicenca): Promise<RespostaLicenca> {
-  const res = await fetch(new URL(CAMINHO_API_LICENCA, urlBase), {
+// `servico`: ligação direta à plataforma quando a instalação está na mesma conta Cloudflare
+// (aí o Cloudflare não deixa um Worker chamar outro pelo endereço workers.dev).
+export async function consultarLicenca(urlBase: string, pedido: PedidoLicenca, servico?: Fetcher): Promise<RespostaLicenca> {
+  const pedidoHttp = new Request(new URL(CAMINHO_API_LICENCA, urlBase), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(pedido),
   });
+  const res = await (servico ? servico.fetch(pedidoHttp) : fetch(pedidoHttp));
   if (!res.ok) throw new Error(`Servidor de licenças respondeu ${res.status}`);
   return res.json<RespostaLicenca>();
 }

@@ -225,13 +225,28 @@ async function mostrarLicencas(c: Ctx, novaChave?: string) {
   return c.html(paginaLicencas(licencas.results.map((l) => ({ licenca: l, cliente: l.cliente_id ? porId.get(l.cliente_id) ?? null : null })), novaChave));
 }
 
-app.get("/gestao", (c) => mostrarLicencas(c));
+app.get("/gestao", async (c) => {
+  const nova = Number(c.req.query("nova"));
+  const chave = nova ? await c.env.DB.prepare("SELECT chave FROM licencas WHERE id = ?").bind(nova).first<string>("chave") : null;
+  return mostrarLicencas(c, chave ?? undefined);
+});
 
 app.post("/gestao/licencas", async (c) => {
   const b = await c.req.parseBody<Record<string, string>>();
   const n = Number(b.alojamentos);
   if (!Number.isInteger(n) || n < 1 || n > 1000) return c.text("Número de alojamentos inválido.", 400);
-  return mostrarLicencas(c, await criarCortesia(c.env.DB, n, b.notas?.trim() || null));
+  const chave = await criarCortesia(c.env.DB, n, b.notas?.trim() || null);
+  const id = await c.env.DB.prepare("SELECT id FROM licencas WHERE chave = ?").bind(chave).first<number>("id");
+  // Redireciona: atualizar a página não volta a submeter o formulário (nem cria outra licença).
+  return c.redirect(`/gestao?nova=${id}`);
+});
+
+// Só cortesias que nunca foram usadas por uma instalação (ex.: criadas por engano).
+app.post("/gestao/licencas/:id/apagar", async (c) => {
+  await c.env.DB.prepare("DELETE FROM licencas WHERE id = ? AND tipo = 'cortesia' AND ultima_comunicacao IS NULL")
+    .bind(Number(c.req.param("id")))
+    .run();
+  return c.redirect("/gestao");
 });
 
 app.post("/gestao/licencas/:id/:acao{revogar|reativar}", async (c) => {
