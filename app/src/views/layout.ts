@@ -1,5 +1,6 @@
 import { html, raw } from "hono/html";
 import type { HtmlEscapedString } from "hono/utils/html";
+import { VERSAO } from "../versao";
 
 type Conteudo = HtmlEscapedString | Promise<HtmlEscapedString>;
 
@@ -91,7 +92,7 @@ export function pagina(titulo: string, corpo: Conteudo, opcoes: { admin?: boolea
   <title>${titulo}</title>
   ${opcoes.admin ? html`<link rel="manifest" href="/manifest.webmanifest">` : ""}
   <link rel="icon" href="/icon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="/estilo.css">
+  <link rel="stylesheet" href="/estilo.css?v=${VERSAO}">
 </head>
 <body class="${opcoes.admin ? "com-menu" : ""}">
   ${opcoes.admin ? menu(opcoes.admin, opcoes.seccao) : ""}
