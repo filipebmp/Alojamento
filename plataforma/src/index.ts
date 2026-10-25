@@ -80,7 +80,7 @@ const app = new Hono<{ Bindings: Env }>();
 
 // ---------- Transição: bookgest.pt servia a instalação do fornecedor ----------
 
-for (const caminho of ["/c/*", "/admin", "/admin/*", "/login", "/logout", "/configurar"]) {
+for (const caminho of ["/c/*", "/admin", "/admin/*", "/login", "/logout", "/configurar", "/recuperar", "/recuperar/*", "/estilo.css", "/manifest.webmanifest", "/sw.js"]) {
   app.all(caminho, async (c, next) => {
     if (!c.env.INSTALACAO_ANTIGA) return next();
     const url = new URL(c.req.url);

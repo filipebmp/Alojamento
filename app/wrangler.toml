@@ -2,6 +2,9 @@ name = "gestao-alojamento-local"
 main = "src/index.ts"
 compatibility_date = "2025-10-01"
 
+# Instalação do fornecedor: domínio próprio no Cloudflare (o registo DNS é criado na publicação).
+routes = [{ pattern = "painel.bookgest.pt", custom_domain = true }]
+
 [[d1_databases]]
 binding = "DB"
 database_name = "alojamento"
@@ -14,7 +17,7 @@ crons = ["17 4 * * *"]
 
 [vars]
 # Endereço público da app, usado nos links de check-in enviados aos hóspedes
-URL_PUBLICO = "https://bookgest.pt"
+URL_PUBLICO = "https://painel.bookgest.pt"
 # Servidor de licenças. Predefinido: https://bookgest.pt (quando a plataforma passar a servir esse domínio).
 URL_LICENCAS = "https://bookgest-plataforma.filipebmp.workers.dev"
 

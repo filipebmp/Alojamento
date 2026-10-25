@@ -37,7 +37,7 @@ INVOICEXPRESS_IMPOSTO = "IVA23"
 EMAIL_REMETENTE = "bookgest <nao-responder@bookgest.pt>"
 # Enquanto o bookgest.pt passa da instalação do fornecedor para a plataforma: endereço dessa instalação,
 # para onde são reencaminhados os links de check-in já enviados (/c/…) e o painel (/admin).
-INSTALACAO_ANTIGA = ""
+INSTALACAO_ANTIGA = "https://painel.bookgest.pt"
 
 # Segredos (definir no GitHub: Settings → Secrets and variables → Actions):
 #   PLATAFORMA_ADMIN_PASSWORD - acesso à página /gestao (enviado ao Worker como ADMIN_PASSWORD)
