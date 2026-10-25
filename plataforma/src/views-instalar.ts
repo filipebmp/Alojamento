@@ -139,15 +139,27 @@ export function paginaTermos(contacto: string | null) {
     <p>Nome, email, dados de faturação e número de alojamentos, para gerir a licença, faturar e dar apoio.</p>`);
 }
 
-export function paginaEntrar(opcoes: { enviado?: boolean; erro?: string } = {}) {
+export function paginaEntrar(opcoes: { enviado?: boolean; erro?: string; erroEndereco?: string; endereco?: string; dominio?: string } = {}) {
+  if (opcoes.enviado) {
+    return pagina("Entrar", html`<h1>Entrar no seu bookgest</h1>
+      <p>✅ Se o email estiver associado a um bookgest, enviámos-lhe o link para entrar.</p>
+      <p class="nota">Não chegou? Veja a pasta de spam.</p>`);
+  }
   return pagina("Entrar", html`<h1>Entrar no seu bookgest</h1>
-    ${opcoes.enviado
-      ? html`<p>✅ Se o email estiver associado a um bookgest, enviámos-lhe o link para entrar.</p>
-          <p class="nota">Não chegou? Veja a pasta de spam.</p>`
-      : html`<p>Cada bookgest tem o seu próprio endereço. Indique o email com que se registou e enviamos-lhe o link.</p>
-          ${opcoes.erro ? html`<p class="erro">${opcoes.erro}</p>` : ""}
-          <form method="post" action="/entrar">
-            <label>Email <input type="email" name="email" required autocomplete="email"></label>
-            <button type="submit">Enviar o link</button>
-          </form>`}`);
+    ${opcoes.erroEndereco ? html`<p class="erro">${opcoes.erroEndereco}</p>` : ""}
+    <form method="post" action="/entrar/ir">
+      <label>O endereço do seu bookgest
+        <span class="endereco"><input name="endereco" required value="${opcoes.endereco ?? ""}" placeholder="casa-da-praia"
+          autocapitalize="none" spellcheck="false" autocomplete="off" ${opcoes.endereco ? "" : "autofocus"}>${opcoes.dominio ? html`<span>.${opcoes.dominio}</span>` : ""}</span></label>
+      <button type="submit">Entrar</button>
+    </form>
+    <details class="cartao" ${opcoes.erro ? "open" : ""}>
+      <summary>Não sabe o seu endereço?</summary>
+      <p>Indique o email com que se registou e enviamos-lhe o link.</p>
+      ${opcoes.erro ? html`<p class="erro">${opcoes.erro}</p>` : ""}
+      <form method="post" action="/entrar">
+        <label>Email <input type="email" name="email" required autocomplete="email"></label>
+        <button type="submit">Enviar o link</button>
+      </form>
+    </details>`);
 }

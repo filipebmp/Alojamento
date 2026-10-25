@@ -1,5 +1,5 @@
 import { type Context, Hono } from "hono";
-import { deleteCookie, getSignedCookie, setSignedCookie } from "hono/cookie";
+import { deleteCookie, getCookie, getSignedCookie, setCookie, setSignedCookie } from "hono/cookie";
 import {
   CAMINHO_API_EMAIL_RECUPERACAO,
   CAMINHO_API_LICENCA,
@@ -388,12 +388,32 @@ async function enviarInstalacaoPronta(env: Env, l: Licenca, r: ResultadoInstalac
 app.get("/termos", (c) => c.html(paginaTermos(c.env.CONTACTO || null)));
 
 // Entrar: cada cliente tem o seu endereço. Envia-o por email (a página não revela se o email é cliente).
-app.get("/entrar", (c) => c.html(paginaEntrarCliente()));
+// O browser lembra-se do último endereço usado (cookie só deste site), para a próxima entrada ser um clique.
+const COOKIE_ENDERECO = "endereco";
+
+function lembrarEndereco(c: Ctx, slug: string) {
+  setCookie(c, COOKIE_ENDERECO, slug, { path: "/", maxAge: 60 * 60 * 24 * 365, sameSite: "Lax", secure: new URL(c.req.url).protocol === "https:" });
+}
+
+const opcoesEntrar = (c: Ctx) => ({ endereco: getCookie(c, COOKIE_ENDERECO), dominio: c.env.DOMINIO_ALOJADAS || undefined });
+
+app.get("/entrar", (c) => c.html(paginaEntrarCliente(opcoesEntrar(c))));
+
+// Aceita "casa", "casa.bookgest.pt" ou o endereço completo, e leva ao ecrã de login dessa instalação.
+app.post("/entrar/ir", async (c) => {
+  const { endereco } = await c.req.parseBody<{ endereco: string }>();
+  const nome = String(endereco ?? "").trim().toLowerCase().replace(/^https?:\/\//, "").split("/")[0]
+    .replace(c.env.DOMINIO_ALOJADAS ? `.${c.env.DOMINIO_ALOJADAS}` : /$^/, "").replace(/^bk-/, "").replace(/\..*$/, "");
+  const l = nome ? await c.env.DB.prepare("SELECT url_instalacao FROM licencas WHERE slug = ? AND url_instalacao IS NOT NULL").bind(nome).first<string>("url_instalacao") : null;
+  if (!l) return c.html(paginaEntrarCliente({ ...opcoesEntrar(c), endereco: String(endereco ?? ""), erroEndereco: "Não encontrámos esse endereço. Confirme-o ou peça-o por email abaixo." }), 404);
+  lembrarEndereco(c, nome);
+  return c.redirect(`${l}/login`);
+});
 
 app.post("/entrar", async (c) => {
   const { email } = await c.req.parseBody<{ email: string }>();
   const e = String(email ?? "").trim().toLowerCase();
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)) return c.html(paginaEntrarCliente({ erro: "Indique um email válido." }), 400);
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)) return c.html(paginaEntrarCliente({ ...opcoesEntrar(c), erro: "Indique um email válido." }), 400);
   const cfg = configEmail(c.env);
   const licencas = (await c.env.DB.prepare(
     `SELECT l.id, l.url_instalacao FROM licencas l JOIN clientes c ON c.id = l.cliente_id
@@ -478,6 +498,7 @@ app.get("/registar/confirmar/:token{[0-9a-f]{48}}", async (c) => {
   const l = (await db.prepare("SELECT * FROM licencas WHERE id = ?").bind(licencaId).first<Licenca>())!;
   const res = await criarAlojada(c, l, r.slug);
   if (typeof res === "string") return c.html(paginaCriar(l.chave, { erro: res, slug: r.slug, sufixo: sufixoEndereco(c.env) }), 502);
+  lembrarEndereco(c, r.slug);
   return c.html(paginaInstalado(res));
 });
 
@@ -503,6 +524,7 @@ app.post("/criar", async (c) => {
   if (!slug) return c.html(paginaCriar(l.chave, { erro: "Nome do endereço inválido ou reservado: 3 a 30 letras minúsculas, números ou hífens.", slug: b.slug, sufixo: sufixoEndereco(c.env) }), 400);
   const res = await criarAlojada(c, l, slug);
   if (typeof res === "string") return c.html(paginaCriar(l.chave, { erro: res, slug, sufixo: sufixoEndereco(c.env) }), 400);
+  lembrarEndereco(c, slug);
   return c.html(paginaInstalado(res));
 });
 
