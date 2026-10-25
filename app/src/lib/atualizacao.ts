@@ -49,6 +49,9 @@ export async function atualizar(db: D1Database, cfg: ConfigAtualizacao, alvo: st
   const v = JSON.parse(assinada.payload) as Versao;
   if (v.versao !== alvo || compararVersoes(v.versao, atual) <= 0) throw new Error(`versão inesperada (${v.versao})`);
   await aplicarMigracoesLocais(db, v.migracoes);
-  await new Cloudflare(cfg.token, cfg.apiCloudflare).publicarScript(cfg.conta, cfg.script, v, "manter");
+  const cf = new Cloudflare(cfg.token, cfg.apiCloudflare);
+  await cf.publicarScript(cfg.conta, cfg.script, v, "manter");
+  // Instalações antigas tinham só a verificação diária: passa a ser de hora a hora (calendários).
+  await cf.pedido("PUT", `/accounts/${cfg.conta}/workers/scripts/${cfg.script}/schedules`, [{ cron: "17 * * * *" }]);
   return v;
 }

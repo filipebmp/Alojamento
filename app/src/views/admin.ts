@@ -7,6 +7,7 @@ import { type Pendente, eEstrangeiro, euros, hospedeCompleto, prazosTmt } from "
 import { SENHA_MINIMA } from "../../../comum/senha";
 import { calcularTmt, cobraTmt } from "../lib/tmt";
 import type { Alojamento, DeclaracaoTmt, Passo } from "../lib/tipos";
+import { type Calendario, NOMES_PLATAFORMA } from "../lib/importacao";
 import { N_CODIGOS, type Papel, type Utilizador } from "../lib/utilizadores";
 import { dataPt, pagina } from "./layout";
 
@@ -108,11 +109,44 @@ export function paginaReserva(
   return pagina(r.nome_titular, html`
     <h1>${r.nome_titular}</h1>
     <p>${gestor ? html`<a href="/admin/alojamentos/${alojamento.id}">${alojamento.nome}</a>` : alojamento.nome} · ${dataPt(r.checkin)} → ${dataPt(r.checkout)} · ${r.n_hospedes} hóspede(s)
-      ${r.ref_booking ? html` · Booking ${r.ref_booking}` : ""}${r.cancelada ? html` · <strong>CANCELADA</strong>` : ""}</p>
+      ${r.ref_booking ? html` · ${r.origem === "airbnb" ? "Airbnb" : r.origem === "booking" || r.origem === "manual" ? "Booking" : "Ref."} ${r.ref_booking}` : ""}${r.cancelada ? html` · <strong>CANCELADA</strong>` : ""}</p>
 
     ${pendentes.length && gestor
       ? html`<ul class="pendentes">${pendentes.map((p) => html`<li class="${classePrazo(p.prazo, hoje)}">${p.descricao}
           ${p.prazo ? html`<span class="prazo">até ${dataPt(p.prazo)}</span>` : ""}</li>`)}</ul>`
+      : ""}
+
+    ${r.desaparecida_em && !r.cancelada
+      ? html`<section class="cartao aviso">
+          <p>Esta reserva deixou de aparecer no calendário ${NOMES_PLATAFORMA[r.origem as keyof typeof NOMES_PLATAFORMA] ?? ""}.
+            Normalmente quer dizer que foi cancelada.</p>
+          ${gestor
+            ? html`<div class="botoes">
+                <form method="post" action="/admin/reservas/${r.id}/cancelar"><button class="perigo">Cancelar a reserva</button></form>
+                <form method="post" action="/admin/reservas/${r.id}/manter"><button>Manter</button></form></div>`
+            : ""}
+        </section>`
+      : ""}
+
+    ${r.incompleta || r.origem !== "manual"
+      ? html`<section class="cartao ${r.incompleta ? "aviso" : ""}">
+          <h2>Dados da reserva</h2>
+          ${r.incompleta
+            ? html`<p>Importada do calendário ${NOMES_PLATAFORMA[r.origem as keyof typeof NOMES_PLATAFORMA] ?? ""}: o calendário só traz as datas.
+                Complete o nome e o n.º de hóspedes antes de enviar o link de check-in.</p>`
+            : html`<p class="nota">Ligada ao calendário ${NOMES_PLATAFORMA[r.origem as keyof typeof NOMES_PLATAFORMA] ?? ""}: as datas atualizam-se sozinhas.</p>`}
+          <form method="post" action="/admin/reservas/${r.id}/dados">
+            <label>Nome do titular <input name="nome_titular" required value="${r.incompleta ? "" : r.nome_titular}" placeholder="Nome como aparece na plataforma"></label>
+            <label>N.º de hóspedes <input type="number" name="n_hospedes" min="1" max="50" required value="${r.incompleta ? "" : r.n_hospedes}"></label>
+            <label>Referência da reserva <input name="ref_booking" value="${r.ref_booking ?? ""}"></label>
+            <button type="submit">Guardar</button>
+          </form>
+          ${gestor && r.uid_externo
+            ? html`<form method="post" action="/admin/reservas/${r.id}/ignorar"
+                onsubmit="return confirm('Estas datas não são uma reserva (por exemplo, fechadas à mão)? Deixam de aparecer e não voltam a ser importadas.')">
+                <button class="perigo">Não é uma reserva</button></form>`
+            : ""}
+        </section>`
       : ""}
 
     <section class="cartao">
@@ -554,7 +588,7 @@ document.querySelector("select[data-concelhos]")?.addEventListener("change", (e)
 
 export function paginaAlojamento(
   a: Alojamento | null,
-  opcoes: { primeiro?: boolean; erro?: string; guardado?: boolean; codigoSugerido?: string } = {},
+  opcoes: { primeiro?: boolean; erro?: string; guardado?: boolean; codigoSugerido?: string; calendarios?: Calendario[] } = {},
 ) {
   const v = (x: string | number | null | undefined) => x ?? "";
   const titulo = a ? a.nome : opcoes.primeiro ? "O seu primeiro alojamento" : "Novo alojamento";
@@ -607,5 +641,36 @@ export function paginaAlojamento(
           ${a.ativo ? html`onsubmit="return confirm('Arquivar este alojamento? Deixa de aparecer nas novas reservas; os dados são conservados.')"` : ""}>
           <button class="${a.ativo ? "perigo" : ""}">${a.ativo ? "Arquivar alojamento" : "Reativar alojamento"}</button></form>`
       : ""}
+    ${a ? seccaoCalendarios(a, opcoes.calendarios ?? []) : ""}
     ${SCRIPT_CONCELHO}`, { admin: true });
+}
+
+// ---------- Calendários (importação de reservas) ----------
+
+function seccaoCalendarios(a: Alojamento, calendarios: Calendario[]) {
+  return html`<section class="cartao" id="calendarios">
+    <h2>Importar reservas (Booking, Airbnb)</h2>
+    <p class="nota">As reservas entram sozinhas, de hora a hora, a partir do calendário de cada plataforma. O calendário só traz as
+      datas: o nome e o n.º de hóspedes completam-se depois na reserva.</p>
+    ${calendarios.length
+      ? html`<ul class="lista">${calendarios.map((cal) => html`<li>
+          <strong>${NOMES_PLATAFORMA[cal.plataforma]}</strong>
+          <span class="prazo">${cal.erro
+            ? html`<span class="erro">Erro: ${cal.erro}</span>`
+            : cal.ultima_sincronizacao ? `Sincronizado em ${dataPt(cal.ultima_sincronizacao)}` : "Ainda não sincronizado"}</span>
+          <form method="post" action="/admin/alojamentos/${a.id}/calendarios/${cal.id}/apagar" onsubmit="return confirm('Deixar de importar deste calendário? As reservas já importadas mantêm-se.')">
+            <button class="perigo">Remover</button></form></li>`)}</ul>
+        <form method="post" action="/admin/alojamentos/${a.id}/calendarios/sincronizar"><button>Sincronizar agora</button></form>`
+      : ""}
+    <form method="post" action="/admin/alojamentos/${a.id}/calendarios">
+      <label>Plataforma <select name="plataforma" required>
+        <option value="booking">Booking</option><option value="airbnb">Airbnb</option><option value="outra">Outra</option></select></label>
+      <label>Link do calendário (iCal) <input name="url" required inputmode="url" placeholder="https://…"></label>
+      <button type="submit">Adicionar</button>
+    </form>
+    <details><summary>Onde encontro o link?</summary>
+      <p><strong>Booking:</strong> Extranet → Tarifas e disponibilidade → Sincronizar calendários → Exportar calendário → copiar o link.</p>
+      <p><strong>Airbnb:</strong> Anúncios → o seu anúncio → Disponibilidade → Ligar calendários → Exportar calendário → copiar o link.</p>
+    </details>
+  </section>`;
 }

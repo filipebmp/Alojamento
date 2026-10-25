@@ -20,6 +20,8 @@ import { configAlojamento, regrasTmt } from "./lib/concelhos";
 import { hojeLisboa } from "./lib/datas";
 import { compararVersoes } from "../../comum/versoes";
 import { atualizar } from "./lib/atualizacao";
+import type { Plataforma } from "./lib/ical";
+import { listarCalendarios, sincronizarCalendario, sincronizarTodos } from "./lib/importacao";
 import {
   type EstadoGuardado,
   URL_LICENCAS_PREDEFINIDO,
@@ -322,6 +324,7 @@ for (const caminho of [
   "/admin/alojamentos", "/admin/alojamentos/*", "/admin/instrucoes", "/admin/tmt", "/admin/tmt/*",
   "/admin/definicoes", "/admin/definicoes/*", "/admin/utilizadores", "/admin/utilizadores/*",
   "/admin/reservas/:id/valores", "/admin/reservas/:id/siba", "/admin/reservas/:id/fatura", "/admin/reservas/:id/cancelar",
+  "/admin/reservas/:id/ignorar", "/admin/reservas/:id/manter",
 ]) {
   app.use(caminho, soGestor);
 }
@@ -355,7 +358,7 @@ app.get("/admin", async (c) => {
     ),
   ];
   // A equipa só vê o que depende dela: formulários e dados de hóspedes por preencher.
-  const pendentes = p === "gestor" ? todos : todos.filter((x) => x.tipo === "formulario" || x.tipo === "dados_hospedes");
+  const pendentes = p === "gestor" ? todos : todos.filter((x) => ["completar", "formulario", "dados_hospedes"].includes(x.tipo));
   const avisoBase = p === "gestor" ? avisoLicenca(licenca.chave, licenca.estado, alojamentos.filter((a) => a.ativo).length, agora) : null;
   const aviso = avisoBase && licenca.problemaDesde
     ? `${avisoBase} ${reservasBloqueadas(licenca.problemaDesde, agora) ? "Já não é possível criar reservas novas." : `A partir de ${dataBloqueio(licenca.problemaDesde).toLocaleDateString("pt-PT", { timeZone: "Europe/Lisbon" })} deixa de ser possível criar reservas novas.`}`
@@ -430,7 +433,30 @@ app.post("/admin/reservas/:id/fatura", async (c) => {
 });
 
 app.post("/admin/reservas/:id/cancelar", async (c) => {
-  await c.env.DB.prepare("UPDATE reservas SET cancelada = 1 WHERE id = ?").bind(Number(c.req.param("id"))).run();
+  await c.env.DB.prepare("UPDATE reservas SET cancelada = 1, desaparecida_em = NULL WHERE id = ?").bind(Number(c.req.param("id"))).run();
+  return c.redirect(`/admin/reservas/${c.req.param("id")}`);
+});
+
+// Dados que o calendário não traz (nome e n.º de hóspedes). Também para a equipa.
+app.post("/admin/reservas/:id/dados", async (c) => {
+  const b = await c.req.parseBody<Record<string, string>>();
+  const n = Number(b.n_hospedes);
+  if (!b.nome_titular?.trim() || !(n >= 1 && n <= 50)) return c.text("Indique o nome do titular e o n.º de hóspedes.", 400);
+  await c.env.DB.prepare("UPDATE reservas SET nome_titular = ?, n_hospedes = ?, ref_booking = ?, incompleta = 0 WHERE id = ?")
+    .bind(b.nome_titular.trim(), n, b.ref_booking?.trim() || null, Number(c.req.param("id")))
+    .run();
+  return c.redirect(`/admin/reservas/${c.req.param("id")}`);
+});
+
+// Datas bloqueadas no Booking que não são uma reserva: deixam de aparecer (e não voltam a ser importadas).
+app.post("/admin/reservas/:id/ignorar", async (c) => {
+  await c.env.DB.prepare("UPDATE reservas SET ignorada = 1, desaparecida_em = NULL WHERE id = ? AND uid_externo IS NOT NULL").bind(Number(c.req.param("id"))).run();
+  return c.redirect("/admin");
+});
+
+// A reserva deixou de aparecer no calendário, mas continua válida.
+app.post("/admin/reservas/:id/manter", async (c) => {
+  await c.env.DB.prepare("UPDATE reservas SET desaparecida_em = NULL WHERE id = ?").bind(Number(c.req.param("id"))).run();
   return c.redirect(`/admin/reservas/${c.req.param("id")}`);
 });
 
@@ -514,7 +540,40 @@ app.post("/admin/alojamentos", async (c) => {
 app.get("/admin/alojamentos/:id", async (c) => {
   const a = await obterAlojamento(c.env.DB, Number(c.req.param("id")));
   if (!a) return c.notFound();
-  return c.html(paginaAlojamento(a, { guardado: c.req.query("guardado") === "1" }));
+  return c.html(paginaAlojamento(a, { guardado: c.req.query("guardado") === "1", calendarios: await listarCalendarios(c.env.DB, a.id) }));
+});
+
+// ---------- Calendários (importação de reservas) ----------
+
+const PLATAFORMAS: Plataforma[] = ["booking", "airbnb", "outra"];
+
+app.post("/admin/alojamentos/:id/calendarios", async (c) => {
+  const a = await obterAlojamento(c.env.DB, Number(c.req.param("id")));
+  if (!a) return c.notFound();
+  const b = await c.req.parseBody<Record<string, string>>();
+  const url = b.url?.trim().replace(/^webcal:\/\//i, "https://");
+  const plataforma = PLATAFORMAS.includes(b.plataforma as Plataforma) ? (b.plataforma as Plataforma) : null;
+  if (!plataforma || !url || !/^https:\/\/\S+$/.test(url)) {
+    return c.html(paginaAlojamento(a, { erro: "Escolha a plataforma e cole o link do calendário (começa por https://).", calendarios: await listarCalendarios(c.env.DB, a.id) }), 400);
+  }
+  const res = await c.env.DB.prepare("INSERT INTO calendarios (alojamento_id, plataforma, url, criado_em) VALUES (?, ?, ?, ?)")
+    .bind(a.id, plataforma, url, new Date().toISOString())
+    .run();
+  const cal = (await listarCalendarios(c.env.DB, a.id)).find((x) => x.id === res.meta.last_row_id)!;
+  await sincronizarCalendario(c.env.DB, cal);
+  return c.redirect(`/admin/alojamentos/${a.id}#calendarios`);
+});
+
+app.post("/admin/alojamentos/:id/calendarios/sincronizar", async (c) => {
+  const id = Number(c.req.param("id"));
+  for (const cal of await listarCalendarios(c.env.DB, id)) await sincronizarCalendario(c.env.DB, cal);
+  return c.redirect(`/admin/alojamentos/${id}#calendarios`);
+});
+
+app.post("/admin/alojamentos/:id/calendarios/:cal/apagar", async (c) => {
+  const id = Number(c.req.param("id"));
+  await c.env.DB.prepare("DELETE FROM calendarios WHERE id = ? AND alojamento_id = ?").bind(Number(c.req.param("cal")), id).run();
+  return c.redirect(`/admin/alojamentos/${id}#calendarios`);
 });
 
 app.post("/admin/alojamentos/:id", async (c) => {
@@ -1024,7 +1083,14 @@ function cents(v: string | undefined): number | null {
 
 export default {
   fetch: app.fetch,
+  // De hora a hora: calendários; a licença (e a atualização automática) uma vez por dia.
   async scheduled(_evento: ScheduledController, env: Env, ctx: ExecutionContext) {
-    ctx.waitUntil(prepararInstalacao(env.DB, env.CODIGO_CHAVES).then(() => verificarLicenca(env)));
+    ctx.waitUntil((async () => {
+      await prepararInstalacao(env.DB, env.CODIGO_CHAVES);
+      await sincronizarTodos(env.DB);
+      const estado = await lerDefinicao(env.DB, "licenca_estado");
+      const ultima = estado ? Date.parse((JSON.parse(estado) as EstadoGuardado).verificadoEm) : 0;
+      if (Date.now() - ultima > 20 * 3_600_000 || (await lerDefinicao(env.DB, "licenca_erro"))) await verificarLicenca(env);
+    })());
   },
 } satisfies ExportedHandler<Env>;

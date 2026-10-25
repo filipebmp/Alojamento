@@ -22,6 +22,11 @@ const reserva: Reserva = {
   siba_submetido_em: null,
   cancelada: 0,
   criado_em: "2026-06-01T00:00:00Z",
+  origem: "manual",
+  uid_externo: null,
+  incompleta: 0,
+  ignorada: 0,
+  desaparecida_em: null,
 };
 
 const titular: Hospede = {
@@ -132,5 +137,19 @@ describe("taxa turística mensal", () => {
 
   it("não pede nada em concelhos sem taxa", () => {
     expect(pendentesTmt(["2026-09"], [], { ...al, regras: { ...almada, valorPorNoiteCents: 0 } })).toEqual([]);
+  });
+});
+
+describe("reservas importadas do calendário", () => {
+  it("pede para completar os dados antes de tudo o resto", () => {
+    const r = { ...reserva, nome_titular: "Reserva Airbnb", incompleta: 1, origem: "airbnb" };
+    const p = pendentesReserva(r, [], null, cfg, new Date("2026-07-01T12:00:00Z"));
+    expect(p.map((x) => [x.tipo, x.descricao, x.prazo])).toEqual([["completar", "Reserva Airbnb (10/07): completar nome e n.º de hóspedes", "2026-07-10"]]);
+  });
+
+  it("assinala as que deixaram de aparecer no calendário", () => {
+    const r = { ...reserva, desaparecida_em: "2026-07-01T00:00:00Z" };
+    const p = pendentesReserva(r, [], null, cfg, new Date("2026-07-01T12:00:00Z"));
+    expect(p[0].tipo).toBe("desaparecida");
   });
 });

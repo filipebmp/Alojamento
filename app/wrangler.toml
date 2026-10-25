@@ -13,9 +13,9 @@ database_name = "alojamento"
 database_id = "SUBSTITUIR_PELO_ID_DA_BASE_DE_DADOS"
 migrations_dir = "migrations"
 
-# Verificação diária da licença (04:17 UTC)
+# De hora a hora: importação dos calendários; a licença é verificada uma vez por dia
 [triggers]
-crons = ["17 4 * * *"]
+crons = ["17 * * * *"]
 
 [vars]
 # Endereço público da app, usado nos links de check-in enviados aos hóspedes

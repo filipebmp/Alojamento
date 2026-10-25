@@ -15,6 +15,11 @@ export interface Reserva {
   siba_submetido_em: string | null;
   cancelada: number;
   criado_em: string;
+  origem: string; // 'manual' | 'booking' | 'airbnb' | 'outra'
+  uid_externo: string | null;
+  incompleta: number;
+  ignorada: number;
+  desaparecida_em: string | null;
 }
 
 export interface Hospede {

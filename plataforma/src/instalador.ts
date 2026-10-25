@@ -7,7 +7,8 @@ import { type Binding, Cloudflare, ErroCloudflare, ligarDominio } from "../../co
 import { type Versao, compararVersoes } from "../../comum/versoes";
 
 export const NOME_PRIVADO = "bookgest";
-export const CRON_DIARIO = "17 4 * * *";
+// De hora a hora: importação dos calendários (e, uma vez por dia, licença e atualização).
+export const CRON_INSTALACAO = "17 * * * *";
 export const PLATAFORMA_SCRIPT = "bookgest-plataforma";
 
 export interface ResultadoInstalacao {
@@ -89,7 +90,7 @@ export async function instalar(token: string, d: OpcoesInstalacao): Promise<Resu
   await cf.publicarScript(conta, nome, d.versao, bindings);
   await cf.pedido("POST", `/accounts/${conta}/workers/scripts/${nome}/subdomain`, { enabled: true, previews_enabled: false });
   if (d.alojado?.dominio) await ligarDominio(cf, conta, d.alojado.dominio.zona, d.alojado.dominio.hostname, nome);
-  await cf.pedido("PUT", `/accounts/${conta}/workers/scripts/${nome}/schedules`, [{ cron: CRON_DIARIO }]);
+  await cf.pedido("PUT", `/accounts/${conta}/workers/scripts/${nome}/schedules`, [{ cron: CRON_INSTALACAO }]);
 
   // Chave de licença e, numa instalação nova, o código de uso único que abre o assistente de primeiro arranque.
   const utilizadores = await cf.consultar<{ n: number }>(conta, base, "SELECT COUNT(*) AS n FROM utilizadores");
@@ -107,6 +108,7 @@ export async function atualizarAlojada(token: string, conta: string, nome: strin
   const cf = new Cloudflare(token, apiCloudflare);
   await cf.aplicarMigracoes(conta, base, v.migracoes);
   await cf.publicarScript(conta, nome, v, "manter");
+  await cf.pedido("PUT", `/accounts/${conta}/workers/scripts/${nome}/schedules`, [{ cron: CRON_INSTALACAO }]);
 }
 
 // Instalação alojada criada antes do domínio próprio: liga <hostname> e atualiza o URL_PUBLICO da app

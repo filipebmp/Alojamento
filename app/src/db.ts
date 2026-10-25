@@ -17,7 +17,7 @@ export async function obterReserva(db: D1Database, id: number): Promise<ReservaC
 }
 
 export async function obterReservaPorToken(db: D1Database, token: string): Promise<ReservaCompleta | null> {
-  const reserva = await db.prepare("SELECT * FROM reservas WHERE token = ?").bind(token).first<Reserva>();
+  const reserva = await db.prepare("SELECT * FROM reservas WHERE token = ? AND ignorada = 0").bind(token).first<Reserva>();
   return reserva ? completar(db, reserva) : null;
 }
 
@@ -32,7 +32,7 @@ async function completar(db: D1Database, reserva: Reserva): Promise<ReservaCompl
 // Reservas ativas e as que ainda podem ter obrigações pendentes.
 export async function listarReservas(db: D1Database): Promise<ReservaCompleta[]> {
   const [reservas, hospedes, faturacao] = await Promise.all([
-    db.prepare("SELECT * FROM reservas ORDER BY checkin DESC").all<Reserva>(),
+    db.prepare("SELECT * FROM reservas WHERE ignorada = 0 ORDER BY checkin DESC").all<Reserva>(),
     db.prepare("SELECT * FROM hospedes ORDER BY titular DESC, id").all<Hospede>(),
     db.prepare("SELECT * FROM faturacao").all<Faturacao>(),
   ]);

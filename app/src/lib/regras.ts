@@ -8,6 +8,8 @@ const HORA = 3_600_000;
 export const DIAS_UTEIS_SIBA = 3;
 export const DIAS_UTEIS_FATURA = 5;
 
+const diaMes = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`;
+
 export function eEstrangeiro(h: Pick<Hospede, "nacionalidade">): boolean {
   return !!h.nacionalidade && h.nacionalidade !== "PT";
 }
@@ -53,7 +55,7 @@ export function prazoDadosHospedes(r: Reserva, cfg: Config): Date {
   return new Date(instanteLisboa(r.checkin, cfg.horaCheckin).getTime() + cfg.horasPrazoHospedes * HORA);
 }
 
-export type TipoPendente = "formulario" | "dados_hospedes" | "siba" | "fatura" | "tmt_divergente" | "tmt_declarar" | "tmt_pagar";
+export type TipoPendente = "completar" | "desaparecida" | "formulario" | "dados_hospedes" | "siba" | "fatura" | "tmt_divergente" | "tmt_declarar" | "tmt_pagar";
 
 export interface Pendente {
   tipo: TipoPendente;
@@ -75,6 +77,15 @@ export function pendentesReserva(
   const hoje = hojeLisboa(agora);
   const p: Pendente[] = [];
   const base = { reservaId: r.id, alojamentoId: r.alojamento_id };
+
+  // Reservas importadas do calendário: primeiro completar os dados, só depois faz sentido enviar o link.
+  if (r.desaparecida_em) {
+    p.push({ ...base, tipo: "desaparecida", descricao: `${r.nome_titular} (${diaMes(r.checkin)}): já não aparece no calendário — confirmar cancelamento`, prazo: null });
+  }
+  if (r.incompleta && hoje <= r.checkout) {
+    p.push({ ...base, tipo: "completar", descricao: `${r.nome_titular} (${diaMes(r.checkin)}): completar nome e n.º de hóspedes`, prazo: r.checkin });
+    return p;
+  }
 
   if (!titularCompleto(r, hospedes, fat) && hoje <= r.checkout) {
     p.push({ ...base, tipo: "formulario", descricao: `${r.nome_titular}: formulário de check-in por preencher`, prazo: r.checkin });
