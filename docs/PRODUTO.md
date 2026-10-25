@@ -135,6 +135,14 @@ Passos de configuração em [PLATAFORMA.md](PLATAFORMA.md) (secção 8).
 - [ ] Contrato de subcontratação de dados e termos revistos por advogado.
 - [ ] Endereços `<nome>.bookgest.pt` (depois de o DNS do bookgest.pt passar para o Cloudflare).
 
+### Funcionalidades (a partir da análise dos concorrentes: stay'in, EazyAL, Hostkit)
+- [x] Importação de reservas pelos calendários iCal do Booking e do Airbnb (de hora a hora).
+- [ ] Completar nome, preço e hóspedes a partir dos emails de confirmação reencaminhados.
+- [ ] SIBA automático (ficheiro; Web Service a confirmar com siba@ssi.gov.pt).
+- [ ] Modelo 30 e resumo do IVA; faturação certificada (InvoiceXpress/Moloni) do gestor.
+- [ ] Página do hóspede em mais línguas, guia local, leitura do documento por fotografia.
+- [ ] Apagar os dados dos hóspedes após o prazo legal; receita real por estadia; limpezas.
+
 ### Fase 4 — Piloto
 - O fornecedor é o cliente n.º 1 (migra para este modelo).
 - 3 a 5 gestores conhecidos, grátis, em troca de feedback.
