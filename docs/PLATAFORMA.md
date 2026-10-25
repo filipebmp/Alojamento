@@ -93,3 +93,28 @@ mostrar a plataforma, servida diretamente pelo Cloudflare:
    91.99.18.25).
 5. No servidor Hetzner: `rm /opt/proxy/sites/bookgest.caddy && bash /opt/proxy/recarregar.sh`.
 6. No Stripe, mudar o endereço do webhook para `https://bookgest.pt/stripe/webhook`.
+
+## 6. Assinatura das versões (atualizações automáticas)
+
+As instalações dos gestores só aceitam versões assinadas com a chave privada que existe apenas
+no GitHub. Gerar o par de chaves **uma vez**, num computador seguro (por exemplo no servidor Hetzner):
+
+```sh
+openssl genpkey -algorithm ed25519 -out bookgest-assinatura.pem
+cat bookgest-assinatura.pem                     # conteúdo completo → segredo do GitHub BOOKGEST_CHAVE_ASSINATURA
+openssl pkey -in bookgest-assinatura.pem -pubout -outform DER | tail -c 32 | base64   # chave pública
+```
+
+- A chave pública vai para `CHAVE_PUBLICA_VERSOES` em `comum/versoes.ts`.
+- Guardar uma cópia da chave privada num sítio seguro e offline e apagar o ficheiro do servidor.
+  **Nunca** a partilhar: quem a tiver pode enviar código para as instalações dos gestores.
+- Cada alteração à app que deva chegar aos gestores precisa de aumentar `VERSAO` em `app/src/versao.ts`.
+
+## 7. Instalador
+
+- Endereço: `https://bookgest-plataforma.filipebmp.workers.dev/instalar` (depois do passo 5,
+  `https://bookgest.pt/instalar`). O email da licença de cortesia já leva o link com a chave.
+- Enquanto o bookgest.pt passa pelo proxy Hetzner, acrescentar `/instalar` e `/api/*` às rotas da
+  plataforma no Caddy (`@plataforma path /gestao /gestao/* /site.css /instalar /instalar/* /api/*`).
+- Antes do primeiro gestor: testar numa conta Cloudflare própria (cria um Worker e uma base `bookgest`,
+  que se podem apagar depois).

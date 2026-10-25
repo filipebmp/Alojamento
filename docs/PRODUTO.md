@@ -100,7 +100,20 @@ Código em `plataforma/`; passos de configuração em [PLATAFORMA.md](PLATAFORMA
   pedido (segunda parte secreta num cookie), por isso nem a plataforma nem o Resend o
   conseguem usar. A plataforma só guarda um hash do destinatário, para limitar abusos.
 
-### Fase 3 — Instalador e atualização automática
+### Fase 3 — Instalador e atualização automática (feito; falta testar com uma conta Cloudflare real)
+Passos de configuração em [PLATAFORMA.md](PLATAFORMA.md) (secções 6 e 7).
+- [x] Instalador em `/instalar`: chave de licença → conta e chave de API do Cloudflare → base de dados,
+  migrações, publicação, workers.dev e cron diário na conta do gestor. A chave de API fica como segredo
+  na conta do gestor; a plataforma só guarda o endereço da instalação.
+- [x] Código de uso único no fim da instalação para criar a conta de gestor.
+- [x] Versões assinadas (Ed25519) no GitHub Actions; a plataforma e as instalações só aceitam versões
+  com assinatura válida.
+- [x] Atualização diária: migrações em falta + publicação do novo código, mantendo as ligações.
+- [x] Novas reservas suspensas ao fim de 14 dias de licença inativa ou alojamentos a mais
+  (dados e reservas existentes sempre acessíveis).
+- [x] O email da licença de cortesia leva o link do instalador.
+
+Plano original:
 - Assistente passo a passo (com capturas) para criar a conta Cloudflare e a chave.
 - Publicação inicial a partir do bookgest.pt; a chave fica como segredo na conta
   do gestor, não na plataforma.

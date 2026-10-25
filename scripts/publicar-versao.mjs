@@ -28,8 +28,9 @@ const res = await fetch(`${plataforma}/api/v1/versoes`, {
   body: JSON.stringify({ payload, assinatura }),
 });
 const resposta = await res.json().catch(() => ({}));
-if (res.status === 409) {
-  // O código da app mudou sem mudar a versão: a publicação do fornecedor segue, as instalações não recebem a alteração.
+if (res.status === 409 || res.status === 503) {
+  // 409: o código da app mudou sem mudar a versão (as instalações não recebem a alteração).
+  // 503: a chave pública ainda não está no código (comum/versoes.ts).
   console.log(`::warning::${resposta.erro}`);
 } else if (!res.ok) {
   console.error(`Publicação da versão ${versao} falhou (${res.status}): ${resposta.erro ?? ""}`);
