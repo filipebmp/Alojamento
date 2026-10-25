@@ -80,6 +80,7 @@ import { paginaHospede } from "./views/hospede";
 import { type VistaReservas, paginaCalendario, paginaHoje, paginaMais, paginaReservas } from "./views/painel";
 import { barrasCalendario, numerosHoje } from "./lib/painel";
 import { faturaPortal, regimeIvaValido } from "./lib/faturacao";
+import { paisValido } from "./lib/paises";
 import { paginaFaturaPortal } from "./views/fatura-portal";
 import { ESTATICOS } from "./estaticos.gerado";
 import { VERSAO } from "./versao";
@@ -1223,7 +1224,7 @@ function lerHospede(b: Record<string, string>, p: string) {
   const nasc = data(b[`${p}data_nascimento`]);
   const nacionalidade = pais(b[`${p}nacionalidade`]);
   if (!nome || !nasc || nasc >= hojeLisboa()) return "Nome e data de nascimento inválidos. / Invalid name or date of birth.";
-  if (!nacionalidade) return "Indique a nacionalidade (código de 2 letras). / Enter nationality (2-letter code).";
+  if (!nacionalidade) return "Escolha a nacionalidade. / Choose your nationality.";
   const doc = {
     pais_residencia: pais(b[`${p}pais_residencia`]),
     doc_tipo: ["P", "B", "O"].includes(b[`${p}doc_tipo`]) ? b[`${p}doc_tipo`] : null,
@@ -1242,7 +1243,7 @@ function data(v: string | undefined): string | null {
 
 function pais(v: string | undefined): string | null {
   const p = v?.trim().toUpperCase();
-  return p && /^[A-Z]{2}$/.test(p) ? p : null;
+  return p && paisValido(p) ? p : null;
 }
 
 function cents(v: string | undefined): number | null {

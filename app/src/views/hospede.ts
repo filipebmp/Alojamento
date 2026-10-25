@@ -3,6 +3,7 @@ import type { ReservaCompleta } from "../db";
 import { type EstadoCodigo, hospedeCompleto, inicioCodigo, titularCompleto } from "../lib/regras";
 import type { Alojamento, Config, Hospede, Passo } from "../lib/tipos";
 import { dataPt, pagina } from "./layout";
+import { type Pais, listaPaises } from "../lib/paises";
 
 // Página do hóspede: bilingue (PT/EN), porque a maioria dos hóspedes é estrangeira.
 
@@ -12,15 +13,24 @@ const TIPOS_DOC = [
   ["O", "Outro / Other"],
 ];
 
+// Lista de países: os mais frequentes primeiro, depois todos por ordem alfabética (o valor guardado fica assinalado na lista completa).
+function seletorPais(nome: string, atual: string | null | undefined, obrigatorio = false) {
+  const { frequentes, todos } = listaPaises();
+  const opcao = (p: Pais) => html`<option value="${p.codigo}"${p.codigo === atual ? " selected" : ""}>${p.nome}</option>`;
+  return html`<select name="${nome}" ${obrigatorio ? "required" : ""} autocomplete="off">
+    <option value="">— Escolher / Choose —</option>
+    <optgroup label="Mais frequentes / Most common">${frequentes.map((p) => html`<option value="${p.codigo}">${p.nome}</option>`)}</optgroup>
+    <optgroup label="Todos / All">${todos.map(opcao)}</optgroup>
+  </select>`;
+}
+
 function camposHospede(prefixo: string, h: Partial<Hospede> = {}, idDocObrigatorio = false) {
   return html`
     <label>Nome completo / Full name
       <input name="${prefixo}nome" required value="${h.nome ?? ""}" autocomplete="name"></label>
     <label>Data de nascimento / Date of birth
       <input type="date" name="${prefixo}data_nascimento" required value="${h.data_nascimento ?? ""}"></label>
-    <label>Nacionalidade / Nationality
-      <input name="${prefixo}nacionalidade" ${idDocObrigatorio ? "required" : ""} maxlength="2" placeholder="PT, ES, DE, GB…"
-        value="${h.nacionalidade ?? ""}" class="pais"></label>
+    <label>Nacionalidade / Nationality ${seletorPais(`${prefixo}nacionalidade`, h.nacionalidade, idDocObrigatorio)}</label>
     <fieldset class="doc">
       <legend>Documento de identificação / ID document <small>(não necessário para portugueses / not required for Portuguese citizens)</small></legend>
       <label>Tipo / Type
@@ -29,10 +39,8 @@ function camposHospede(prefixo: string, h: Partial<Hospede> = {}, idDocObrigator
           ${TIPOS_DOC.map(([v, t]) => html`<option value="${v}" ${h.doc_tipo === v ? "selected" : ""}>${t}</option>`)}
         </select></label>
       <label>Número / Number <input name="${prefixo}doc_numero" value="${h.doc_numero ?? ""}"></label>
-      <label>País emissor / Issuing country
-        <input name="${prefixo}doc_pais" maxlength="2" class="pais" value="${h.doc_pais ?? ""}"></label>
-      <label>País de residência / Country of residence
-        <input name="${prefixo}pais_residencia" maxlength="2" class="pais" value="${h.pais_residencia ?? ""}"></label>
+      <label>País emissor / Issuing country ${seletorPais(`${prefixo}doc_pais`, h.doc_pais)}</label>
+      <label>País de residência / Country of residence ${seletorPais(`${prefixo}pais_residencia`, h.pais_residencia)}</label>
     </fieldset>`;
 }
 
@@ -73,7 +81,7 @@ export function paginaHospede(
         <label>Nome na fatura / Name on invoice <input name="f_nome" required value="${faturacao?.nome ?? ""}"></label>
         <label>NIF / Tax ID (ou n.º de documento / or ID number)
           <input name="f_nif" required value="${faturacao?.nif ?? ""}"></label>
-        <label>País / Country <input name="f_pais" required maxlength="2" class="pais" value="${faturacao?.pais ?? ""}"></label>
+        <label>País / Country ${seletorPais("f_pais", faturacao?.pais, true)}</label>
         <label>Morada / Address <input name="f_morada" value="${faturacao?.morada ?? ""}"></label>
         <label>Código postal / Postcode <input name="f_codigo_postal" value="${faturacao?.codigo_postal ?? ""}"></label>
         <label>Cidade / City <input name="f_cidade" value="${faturacao?.cidade ?? ""}"></label>
