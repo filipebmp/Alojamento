@@ -228,7 +228,15 @@ async function mostrarLicencas(c: Ctx, novaChave?: string) {
   const preco = await precoMensal(c.env);
   const env = c.env;
   const estado = [
-    { nome: "Chave secreta do Stripe", ok: !!env.STRIPE_SECRET_KEY, detalhe: env.STRIPE_SECRET_KEY ? (env.STRIPE_SECRET_KEY.startsWith("sk_test_") ? "modo de teste" : env.STRIPE_SECRET_KEY.slice(0, 8) + "…") : "segredo STRIPE_SECRET_KEY em falta" },
+    {
+      nome: "Chave secreta do Stripe",
+      ok: /^(sk|rk)_/.test(env.STRIPE_SECRET_KEY ?? ""),
+      detalhe: !env.STRIPE_SECRET_KEY
+        ? "segredo STRIPE_SECRET_KEY em falta"
+        : env.STRIPE_SECRET_KEY.startsWith("pk_")
+          ? "é a chave publicável (pk_…): use a chave secreta (sk_…)"
+          : env.STRIPE_SECRET_KEY.startsWith("sk_test_") ? "modo de teste" : env.STRIPE_SECRET_KEY.slice(0, 8) + "…",
+    },
     { nome: "Preço", ok: preco != null, detalhe: preco != null ? `${(preco / 100).toFixed(2).replace(".", ",")} € por alojamento` : erroPreco ?? (env.STRIPE_PRECO ? "sem resposta" : "STRIPE_PRECO em falta") },
     { nome: "Segredo do webhook", ok: !!env.STRIPE_WEBHOOK_SECRET, detalhe: env.STRIPE_WEBHOOK_SECRET ? "definido" : "segredo STRIPE_WEBHOOK_SECRET em falta" },
     { nome: "Vendas abertas", ok: vendasAbertas(env), detalhe: env.VENDAS_ABERTAS === "sim" ? "sim" : "não" },
