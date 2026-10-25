@@ -41,3 +41,9 @@ describe("bloqueio por licença", () => {
     expect(haProblema({ estado: "pagamento_em_atraso", alojamentosPagos: 2 }, 1)).toBe(true);
   });
 });
+
+describe("período experimental", () => {
+  it("avisa da data de fim do teste", () => {
+    expect(avisoLicenca("BG-1", { ...ok, fimTeste: "2026-11-24T12:00:00Z" }, 1, agora)).toMatch(/Período experimental até 24\/11\/2026/);
+  });
+});

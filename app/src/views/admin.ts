@@ -480,7 +480,7 @@ export function paginaReservasBloqueadas(papel: Papel) {
 
 export function paginaDefinicoes(opcoes: {
   erro?: string;
-  licenca: { chave: string | null; estado: EstadoGuardado | null; erro: string | null; aviso: string | null };
+  licenca: { chave: string | null; estado: EstadoGuardado | null; erro: string | null; aviso: string | null; linkAssinar: string | null };
   versao: { atual: string; automatica: boolean; ultima: { em: string; versao: string; erro?: string } | null };
 }) {
   const v = opcoes.versao;
@@ -499,6 +499,9 @@ export function paginaDefinicoes(opcoes: {
         : chave ? html`<p class="nota">Ainda não foi possível verificar a licença.</p>` : ""}
       ${chave && erro ? html`<p class="nota">Última tentativa falhou: ${erro}</p>` : ""}
       ${aviso ? html`<p class="erro">${aviso}</p>` : ""}
+      ${opcoes.licenca.linkAssinar && estado && (estado.fimTeste || estado.estado === "inativa")
+        ? html`<p><a class="botao" href="${opcoes.licenca.linkAssinar}" target="_blank" rel="noopener">Subscrever</a></p>`
+        : ""}
       <form method="post" action="/admin/definicoes/licenca">
         <label>Chave de licença <input name="chave" required value="${chave ?? ""}" placeholder="BG-XXXX-XXXX-XXXX-XXXX" autocapitalize="characters"></label>
         <button type="submit">Guardar e verificar</button>

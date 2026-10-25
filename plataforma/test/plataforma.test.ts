@@ -3,6 +3,7 @@ import { pedidoEmailValido, pedidoValido } from "../../comum/licenca";
 import { emailRecuperacao } from "../src/email";
 import { type Fatura, corpoFaturaRecibo } from "../src/faturas";
 import { estadoLicenca, gerarChave } from "../src/licencas";
+import { slugValido } from "../src/instalador";
 import { assinaturaValida, codificar } from "../src/stripe";
 
 async function assinar(corpo: string, segredo: string, t: number) {
@@ -48,13 +49,16 @@ describe("licenças", () => {
   });
 
   it("traduz o estado da assinatura", () => {
-    const l = { tipo: "stripe" as const, revogada: 0 };
+    const l = { tipo: "stripe" as const, revogada: 0, valida_ate: null };
     expect(estadoLicenca({ ...l, stripe_estado: "active" })).toBe("ativa");
     expect(estadoLicenca({ ...l, stripe_estado: "past_due" })).toBe("pagamento_em_atraso");
     expect(estadoLicenca({ ...l, stripe_estado: "canceled" })).toBe("inativa");
     expect(estadoLicenca({ ...l, stripe_estado: "incomplete" })).toBe("inativa");
-    expect(estadoLicenca({ tipo: "cortesia", stripe_estado: null, revogada: 0 })).toBe("ativa");
-    expect(estadoLicenca({ tipo: "cortesia", stripe_estado: null, revogada: 1 })).toBe("inativa");
+    expect(estadoLicenca({ tipo: "cortesia", stripe_estado: null, revogada: 0, valida_ate: null })).toBe("ativa");
+    expect(estadoLicenca({ tipo: "cortesia", stripe_estado: null, revogada: 1, valida_ate: null })).toBe("inativa");
+    const agora = new Date("2026-10-25T12:00:00Z");
+    expect(estadoLicenca({ tipo: "teste", stripe_estado: null, revogada: 0, valida_ate: "2026-11-24T12:00:00Z" }, agora)).toBe("ativa");
+    expect(estadoLicenca({ tipo: "teste", stripe_estado: null, revogada: 0, valida_ate: "2026-10-25T11:59:59Z" }, agora)).toBe("inativa");
   });
 
   it("valida o pedido de uma instalação", () => {
@@ -102,5 +106,17 @@ describe("email de recuperação", () => {
 
   it("escapa o link no HTML do email", () => {
     expect(emailRecuperacao('https://x.pt/recuperar/"><script>').html).not.toContain("<script>");
+  });
+});
+
+describe("nome do endereço (modo alojado)", () => {
+  it("aceita só nomes simples", () => {
+    expect(slugValido("Casa-da-Praia")).toBe("casa-da-praia");
+    expect(slugValido("ab")).toBeNull();
+    expect(slugValido("-casa")).toBeNull();
+    expect(slugValido("casa-")).toBeNull();
+    expect(slugValido("casa--praia")).toBeNull();
+    expect(slugValido("casa_praia")).toBeNull();
+    expect(slugValido("a".repeat(31))).toBeNull();
   });
 });

@@ -46,6 +46,7 @@ export interface Morada {
 
 export interface CheckoutSession {
   id: string;
+  client_reference_id?: string | null;
   status: "open" | "complete" | "expired";
   customer: string | null;
   subscription: string | Subscription | null;

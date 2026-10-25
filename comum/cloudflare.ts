@@ -80,5 +80,6 @@ export class Cloudflare {
 
 export type Binding =
   | { type: "d1"; name: string; id: string }
+  | { type: "service"; name: string; service: string }
   | { type: "plain_text"; name: string; text: string }
   | { type: "secret_text"; name: string; text: string };

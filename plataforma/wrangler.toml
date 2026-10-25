@@ -11,11 +11,19 @@ database_name = "plataforma"
 database_id = "SUBSTITUIR_PELO_ID_DA_BASE_DE_DADOS"
 migrations_dir = "migrations"
 
+# Atualização das instalações alojadas (de hora a hora)
+[triggers]
+crons = ["23 * * * *"]
+
 [vars]
 # Endereço público da plataforma (usado nos regressos do Stripe). Vazio = o endereço do pedido.
 URL_PUBLICO = ""
 # Email de contacto mostrado no site
 CONTACTO = ""
+# "sim" para aceitar registos com 30 dias grátis, alojados na conta do fornecedor (exige Resend e CF_API_TOKEN)
+REGISTOS_ABERTOS = "nao"
+# Subdomínio workers.dev da conta do fornecedor (endereços das instalações alojadas: bk-<nome>.<subdomínio>.workers.dev)
+CF_SUBDOMINIO = "filipebmp"
 # "sim" para mostrar o botão de compra (exige também STRIPE_PRECO e STRIPE_SECRET_KEY)
 VENDAS_ABERTAS = "sim"
 # Id do preço mensal por alojamento no Stripe (price_…), com IVA incluído

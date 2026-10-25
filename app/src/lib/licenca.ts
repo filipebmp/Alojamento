@@ -36,6 +36,9 @@ export function avisoLicenca(chave: string | null, estado: EstadoGuardado | null
   if (agora.getTime() - Date.parse(estado.verificadoEm) > DIAS_SEM_RESPOSTA * 86_400_000) {
     return `Não foi possível confirmar a licença desde ${dataPt(estado.verificadoEm)}.`;
   }
+  if (estado.estado === "ativa" && estado.fimTeste) {
+    return `Período experimental até ${dataPt(estado.fimTeste)}. Para continuar, subscreva em Definições → Licença.`;
+  }
   switch (estado.estado) {
     case "desconhecida":
       return "A chave de licença não é reconhecida: confirme-a em Definições.";

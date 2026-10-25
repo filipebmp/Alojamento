@@ -15,6 +15,7 @@ export interface RespostaLicenca {
   estado: EstadoLicenca;
   alojamentosPagos: number;
   versaoAtual?: string | null; // versão mais recente publicada (atualização automática)
+  fimTeste?: string | null; // fim do período experimental (licenças de teste)
 }
 
 export function pedidoValido(p: unknown): p is PedidoLicenca {

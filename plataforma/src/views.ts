@@ -41,6 +41,7 @@ const dataPt = (iso: string | null) => {
 export interface DadosSite {
   precoCents: number | null; // por alojamento e mês, IVA incluído
   vendasAbertas: boolean;
+  registosAbertos: boolean;
   contacto: string | null;
   portal: string | null; // link de acesso ao portal do cliente do Stripe
 }
@@ -60,7 +61,10 @@ export function paginaInicio(d: DadosSite) {
       <h1>O seu Alojamento Local em ordem, sem papelada.</h1>
       <p>Check-in online, entrega do código das chaves e todos os prazos legais num só sítio —
         feito para quem gere um ou poucos alojamentos.</p>
-      <a class="botao grande" href="#precos">Ver preço</a>
+      ${d.registosAbertos
+        ? html`<a class="botao grande" href="/registar">Experimentar 30 dias grátis</a>
+            <p class="nota">Sem cartão. Pronto a usar num minuto.</p>`
+        : html`<a class="botao grande" href="#precos">Ver preço</a>`}
     </section>
 
     <section class="grelha">
@@ -68,10 +72,11 @@ export function paginaInicio(d: DadosSite) {
     </section>
 
     <section class="cartao privacidade">
-      <h2>🔒 Os dados dos seus hóspedes ficam consigo</h2>
-      <p>O bookgest é instalado numa conta Cloudflare <strong>em seu nome</strong> (gratuita).
-        Reservas, documentos e moradas dos hóspedes ficam aí guardados e nós <strong>não temos acesso</strong> a eles.</p>
-      <p>Da sua instalação só recebemos a chave de licença, a versão e o número de alojamentos ativos.</p>
+      <h2>🔒 Os dados dos seus hóspedes, protegidos</h2>
+      <p><strong>Simples:</strong> registe-se e comece já. Cada cliente tem a sua própria base de dados, separada das
+        outras; tratamos os dados apenas por sua conta e não os consultamos.</p>
+      <p><strong>Privado:</strong> prefere que ninguém além de si tenha acesso? Instalamos o bookgest numa conta
+        Cloudflare <strong>em seu nome</strong> (gratuita): os dados ficam lá e nós não temos acesso a eles.</p>
     </section>
 
     <section id="precos" class="cartao precos">
@@ -92,8 +97,8 @@ export function paginaInicio(d: DadosSite) {
     <section>
       <h2>Perguntas frequentes</h2>
       <details><summary>Preciso de conhecimentos técnicos?</summary>
-        <p>Não. Ajudamos a criar a conta Cloudflare e a instalar o bookgest consigo.</p></details>
-      <details><summary>Quanto custa a conta Cloudflare?</summary>
+        <p>Não. No modo Simples basta registar-se. O modo Privado tem um instalador passo a passo (cerca de 10 minutos).</p></details>
+      <details><summary>Quanto custa a conta Cloudflare do modo Privado?</summary>
         <p>Nada: o plano gratuito chega para um pequeno gestor de Alojamento Local.</p></details>
       <details><summary>E se deixar de pagar?</summary>
         <p>Continua a poder consultar todos os seus dados — a lei obriga-o a guardá-los e nós nunca os bloqueamos.</p></details>
@@ -104,12 +109,16 @@ export function paginaInicio(d: DadosSite) {
   `, { portal: d.portal, descricao: "Check-in online, código das chaves e prazos legais (SIBA, fatura, taxa turística) para pequenos gestores de Alojamento Local." });
 }
 
-export function paginaObrigado(chave: string | null, contacto: string | null, portal: string | null) {
+export function paginaObrigado(chave: string | null, contacto: string | null, portal: string | null, instalacao: string | null = null) {
   return pagina("Obrigado", html`<h1>Obrigado!</h1>
     ${chave
       ? html`<p>A sua assinatura está ativa. Esta é a sua chave de licença — guarde-a:</p>
         <p class="chave">${chave}</p>
-        <p>Vamos contactá-lo por email para o ajudar a instalar o bookgest na sua conta Cloudflare.</p>`
+        ${instalacao
+          ? html`<p>Continue a usar o seu bookgest em <a href="${instalacao}">${instalacao}</a>.</p>`
+          : html`<p><a class="botao grande" href="/criar?chave=${encodeURIComponent(chave)}">Criar o meu bookgest</a></p>
+            <p class="nota">Alojado pelo bookgest, pronto num minuto. Ou
+              <a href="/instalar?chave=${encodeURIComponent(chave)}">instalar numa conta Cloudflare sua</a>.</p>`}`
       : html`<p>Estamos a confirmar o pagamento. Atualize esta página dentro de alguns segundos.</p>`}
     ${portal ? html`<p class="nota">Para alterar o número de alojamentos, o método de pagamento ou cancelar: <a href="${portal}">A minha assinatura</a>.</p>` : ""}
     ${contacto ? html`<p class="nota">Dúvidas: <a href="mailto:${contacto}">${contacto}</a></p>` : ""}`, { portal });
@@ -159,7 +168,8 @@ export function paginaLicencas(
         return html`<tr>
           <td><code>${l.chave}</code>${l.url_instalacao ? html`<br><small><a href="${l.url_instalacao}" target="_blank" rel="noopener">instalação</a></small>` : ""}</td>
           <td>${c?.nome ?? ""}${c?.email ? html`<br><small>${c.email}</small>` : ""}${l.notas ? html`<br><small>${l.notas}</small>` : ""}</td>
-          <td>${l.tipo}</td>
+          <td>${l.tipo}${l.modo ? html`<br><small>${l.modo}</small>` : ""}${l.valida_ate ? html`<br><small>até ${dataPt(l.valida_ate)}</small>` : ""}
+            ${l.erro_atualizacao ? html`<br><small class="erro">atualização: ${l.erro_atualizacao}</small>` : ""}</td>
           <td class="${estado === "ativa" ? "" : "erro"}">${NOMES_ESTADO[estado]}</td>
           <td>${l.alojamentos_pagos}</td>
           <td class="${excede ? "erro" : ""}">${l.alojamentos_ativos ?? "—"}</td>

@@ -10,14 +10,23 @@ import {
 import { iguais } from "../../comum/senha";
 import { ErroCloudflare } from "../../comum/cloudflare";
 import { CAMINHO_API_VERSOES, CHAVE_PUBLICA_VERSOES, type Versao, type VersaoAssinada, assinaturaConfere, compararVersoes } from "../../comum/versoes";
-import { instalar } from "./instalador";
-import { type ConfigEmail, emailLicencaCortesia, emailRecuperacao, enviarEmail, hashEmail } from "./email";
+import { type ResultadoInstalacao, atualizarAlojada, instalar, nomeAlojado, precisaAtualizar, slugValido } from "./instalador";
+import {
+  type ConfigEmail,
+  emailConfirmarRegisto,
+  emailInstalacaoPronta,
+  emailLicencaCortesia,
+  emailRecuperacao,
+  enviarEmail,
+  hashEmail,
+} from "./email";
 import { type ConfigInvoiceXpress, type Fatura, emitirFatura, registarFatura } from "./faturas";
 import {
   type Cliente,
   type Licenca,
   atualizarSubscricao,
   criarCortesia,
+  criarTeste,
   estadoLicenca,
   garantirLicencaCheckout,
   guardarCliente,
@@ -26,7 +35,15 @@ import {
   registarComunicacao,
 } from "./licencas";
 import { type CheckoutSession, type Evento, type Invoice, type Price, type Subscription, assinaturaValida, stripe } from "./stripe";
-import { paginaInstalado, paginaInstalar, paginaInstalarCloudflare } from "./views-instalar";
+import {
+  paginaAssinar,
+  paginaCriar,
+  paginaInstalado,
+  paginaInstalar,
+  paginaInstalarCloudflare,
+  paginaRegistar,
+  paginaTermos,
+} from "./views-instalar";
 import { paginaEntrar, paginaFaturas, paginaInicio, paginaLicencas, paginaMensagem, paginaObrigado } from "./views";
 
 type Env = {
@@ -46,6 +63,11 @@ type Env = {
   EMAIL_REMETENTE?: string; // ex.: "bookgest <nao-responder@bookgest.pt>"
   RESEND_URL?: string; // só para testes locais
   CF_API_URL?: string; // só para testes locais (API do Cloudflare simulada)
+  // Modo alojado: conta Cloudflare do fornecedor onde ficam as instalações dos clientes.
+  CF_API_TOKEN?: string;
+  CF_CONTA?: string;
+  CF_SUBDOMINIO?: string; // subdomínio workers.dev da conta (só para mostrar o endereço no registo)
+  REGISTOS_ABERTOS?: string; // "sim" para aceitar registos com período experimental
   // Endereço da instalação que servia o bookgest.pt antes da plataforma: os links já enviados a hóspedes continuam a funcionar.
   INSTALACAO_ANTIGA?: string;
 };
@@ -88,7 +110,7 @@ const vendasAbertas = (env: Env) => env.VENDAS_ABERTAS === "sim" && !!env.STRIPE
 const urlBase = (c: Ctx) => c.env.URL_PUBLICO || new URL(c.req.url).origin;
 
 app.get("/", async (c) =>
-  c.html(paginaInicio({ precoCents: await precoMensal(c.env), vendasAbertas: vendasAbertas(c.env), contacto: c.env.CONTACTO ?? null,
+  c.html(paginaInicio({ precoCents: await precoMensal(c.env), vendasAbertas: vendasAbertas(c.env), registosAbertos: registosAbertos(c.env), contacto: c.env.CONTACTO ?? null,
     portal: c.env.STRIPE_PORTAL || null })),
 );
 
@@ -124,7 +146,7 @@ app.get("/obrigado", async (c) => {
   }
   c.header("Cache-Control", "no-store");
   c.header("Referrer-Policy", "no-referrer");
-  return c.html(paginaObrigado(licenca?.chave ?? null, c.env.CONTACTO ?? null, c.env.STRIPE_PORTAL || null));
+  return c.html(paginaObrigado(licenca?.chave ?? null, c.env.CONTACTO ?? null, c.env.STRIPE_PORTAL || null, licenca?.url_instalacao ?? null));
 });
 
 // ---------- Webhooks do Stripe ----------
@@ -192,6 +214,7 @@ app.post(CAMINHO_API_LICENCA, async (c) => {
     estado: estadoLicenca(licenca),
     alojamentosPagos: licenca.alojamentos_pagos,
     versaoAtual: await versaoMaisRecente(c.env.DB),
+    fimTeste: licenca.tipo === "teste" ? licenca.valida_ate : null,
   });
 });
 
@@ -266,7 +289,9 @@ app.post("/instalar/concluir", async (c) => {
       urlLicencas: urlBase(c),
       apiCloudflare: c.env.CF_API_URL || undefined,
     });
-    await c.env.DB.prepare("UPDATE licencas SET url_instalacao = ?, instalada_em = ? WHERE id = ?").bind(r.url, new Date().toISOString(), l.id).run();
+    await c.env.DB.prepare("UPDATE licencas SET modo = 'privado', url_instalacao = ?, instalada_em = ? WHERE id = ?")
+      .bind(r.url, new Date().toISOString(), l.id)
+      .run();
     return c.html(paginaInstalado(r));
   } catch (e) {
     // Nunca registar a chave de API do gestor: só a mensagem do Cloudflare.
@@ -275,6 +300,205 @@ app.post("/instalar/concluir", async (c) => {
     return c.html(paginaInstalarCloudflare(l.chave, `O Cloudflare recusou um passo da instalação: ${msg}`), 502);
   }
 });
+
+// ---------- Modo "Simples": instalações alojadas na conta do fornecedor ----------
+
+const alojamentoDisponivel = (env: Env) => !!env.CF_API_TOKEN && !!env.CF_CONTA;
+const sufixoEndereco = (env: Env) => `bk-<nome>.${env.CF_SUBDOMINIO || "…"}.workers.dev`;
+
+async function versaoParaInstalar(db: D1Database): Promise<Versao | null> {
+  const atual = await versaoMaisRecente(db);
+  const assinada = atual ? await obterVersao(db, atual) : null;
+  return assinada ? (JSON.parse(assinada.payload) as Versao) : null;
+}
+
+// Reserva o nome do endereço para a licença (o índice único impede dois clientes com o mesmo) e cria a instalação.
+async function criarAlojada(c: Ctx, l: Licenca, slug: string): Promise<ResultadoInstalacao | string> {
+  if (!alojamentoDisponivel(c.env)) return "A criação de instalações não está disponível de momento. Contacte-nos.";
+  const versao = await versaoParaInstalar(c.env.DB);
+  if (!versao) return "Ainda não há nenhuma versão publicada para instalar. Contacte-nos.";
+  try {
+    const r = await c.env.DB.prepare("UPDATE licencas SET slug = ? WHERE id = ? AND (slug IS NULL OR slug = ?)").bind(slug, l.id, slug).run();
+    if (!r.meta.changes) return "Esta licença já tem outro endereço.";
+  } catch {
+    return "Esse nome de endereço já está a ser usado. Escolha outro.";
+  }
+  try {
+    const r = await instalar(c.env.CF_API_TOKEN!, {
+      versao,
+      chaveLicenca: l.chave,
+      urlLicencas: urlBase(c),
+      apiCloudflare: c.env.CF_API_URL || undefined,
+      alojado: { conta: c.env.CF_CONTA!, nome: nomeAlojado(slug) },
+    });
+    await c.env.DB.prepare(
+      "UPDATE licencas SET modo = 'alojado', url_instalacao = ?, instalada_em = ?, cf_base = ?, versao_publicada = ?, erro_atualizacao = NULL WHERE id = ?",
+    )
+      .bind(r.url, new Date().toISOString(), r.base, versao.versao, l.id)
+      .run();
+    await enviarInstalacaoPronta(c.env, l, r);
+    return r;
+  } catch (e) {
+    const msg = e instanceof ErroCloudflare ? e.message : String(e);
+    console.error("Criação da instalação alojada falhou:", msg);
+    return `Não foi possível criar a instalação (${msg}). Tente de novo ou contacte-nos.`;
+  }
+}
+
+// Envia o endereço e o link de criação da conta (para o cliente não os perder se fechar a página).
+async function enviarInstalacaoPronta(env: Env, l: Licenca, r: ResultadoInstalacao): Promise<void> {
+  const cfg = configEmail(env);
+  const email = l.cliente_id ? await env.DB.prepare("SELECT email FROM clientes WHERE id = ?").bind(l.cliente_id).first<string>("email") : null;
+  if (!cfg || !email) return;
+  const linkConta = r.tokenConfiguracao ? `${r.url}/configurar?t=${r.tokenConfiguracao}` : null;
+  await enviarEmail(cfg, { para: email, responderPara: env.CONTACTO || null, ...emailInstalacaoPronta({ url: r.url, linkConta }) })
+    .catch((e) => console.error("Email de instalação pronta falhou", e));
+}
+
+app.get("/termos", (c) => c.html(paginaTermos(c.env.CONTACTO || null)));
+
+const registosAbertos = (env: Env) => env.REGISTOS_ABERTOS === "sim" && alojamentoDisponivel(env) && !!configEmail(env);
+
+app.get("/registar", (c) => {
+  if (!registosAbertos(c.env)) return c.html(paginaMensagem("Em breve", "Os registos ainda não estão abertos."), 403);
+  return c.html(paginaRegistar({ sufixo: sufixoEndereco(c.env) }));
+});
+
+app.post("/registar", async (c) => {
+  if (!registosAbertos(c.env)) return c.html(paginaMensagem("Em breve", "Os registos ainda não estão abertos."), 403);
+  const b = await c.req.parseBody<Record<string, string>>();
+  const valores = { nome: b.nome?.trim() || undefined, email: b.email?.trim().toLowerCase(), slug: b.slug?.trim().toLowerCase(), sufixo: sufixoEndereco(c.env) };
+  const slug = slugValido(b.slug);
+  if (!valores.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(valores.email)) return c.html(paginaRegistar({ ...valores, erro: "Indique um email válido." }), 400);
+  if (!slug) return c.html(paginaRegistar({ ...valores, erro: "Nome do endereço inválido: 3 a 30 letras minúsculas, números ou hífens." }), 400);
+  if (!b.termos) return c.html(paginaRegistar({ ...valores, erro: "Tem de aceitar os termos." }), 400);
+  if (await c.env.DB.prepare("SELECT 1 FROM licencas WHERE slug = ?").bind(slug).first()) {
+    return c.html(paginaRegistar({ ...valores, erro: "Esse nome de endereço já está a ser usado. Escolha outro." }), 400);
+  }
+  const ontem = new Date(Date.now() - 86_400_000).toISOString();
+  const recentes = await c.env.DB.prepare("SELECT COUNT(*) AS n FROM registos WHERE email = ? AND criado_em > ?").bind(valores.email, ontem).first<number>("n");
+  if ((recentes ?? 0) >= 3) return c.html(paginaRegistar({ ...valores, erro: "Já pediu vários registos hoje. Veja o seu email (e o spam)." }), 429);
+
+  const token = [...crypto.getRandomValues(new Uint8Array(24))].map((x) => x.toString(16).padStart(2, "0")).join("");
+  const agora = new Date().toISOString();
+  await c.env.DB.prepare("INSERT INTO registos (token_hash, nome, email, slug, aceitou_termos_em, criado_em) VALUES (?, ?, ?, ?, ?, ?)")
+    .bind(await hashEmail(token), valores.nome ?? null, valores.email, slug, agora, agora)
+    .run();
+  try {
+    await enviarEmail(configEmail(c.env)!, { para: valores.email, ...emailConfirmarRegisto(`${urlBase(c)}/registar/confirmar/${token}`) });
+  } catch (e) {
+    console.error("Email de confirmação falhou", e);
+    return c.html(paginaRegistar({ ...valores, erro: "Não foi possível enviar o email de confirmação. Tente de novo." }), 502);
+  }
+  return c.html(paginaRegistar({ ...valores, enviado: true }));
+});
+
+// Confirmação do email: cria o cliente, a licença experimental e a instalação.
+app.get("/registar/confirmar/:token{[0-9a-f]{48}}", async (c) => {
+  c.header("Referrer-Policy", "no-referrer");
+  const db = c.env.DB;
+  const r = await db.prepare("SELECT * FROM registos WHERE token_hash = ?").bind(await hashEmail(c.req.param("token")))
+    .first<{ id: number; nome: string | null; email: string; slug: string; criado_em: string; confirmado_em: string | null; licenca_id: number | null }>();
+  if (!r || (!r.confirmado_em && r.criado_em < new Date(Date.now() - 2 * 86_400_000).toISOString())) {
+    return c.html(paginaMensagem("Link inválido", "O link expirou ou não existe. Registe-se de novo."), 400);
+  }
+  // Abrir o link outra vez não cria outra instalação.
+  if (r.licenca_id) {
+    const l = await db.prepare("SELECT * FROM licencas WHERE id = ?").bind(r.licenca_id).first<Licenca>();
+    if (l?.url_instalacao) return c.html(paginaMensagem("Já está criado", `O seu bookgest está em ${l.url_instalacao}`));
+  }
+  let licencaId = r.licenca_id;
+  if (!licencaId) {
+    const agora = new Date().toISOString();
+    const cliente = (await db.prepare("INSERT INTO clientes (email, nome, criado_em) VALUES (?, ?, ?)").bind(r.email, r.nome, agora).run()).meta.last_row_id;
+    licencaId = await criarTeste(db, cliente);
+    await db.prepare("UPDATE registos SET confirmado_em = ?, licenca_id = ? WHERE id = ?").bind(agora, licencaId, r.id).run();
+  }
+  const l = (await db.prepare("SELECT * FROM licencas WHERE id = ?").bind(licencaId).first<Licenca>())!;
+  const res = await criarAlojada(c, l, r.slug);
+  if (typeof res === "string") return c.html(paginaCriar(l.chave, { erro: res, slug: r.slug, sufixo: sufixoEndereco(c.env) }), 502);
+  return c.html(paginaInstalado(res));
+});
+
+// Licença sem instalação (comprada no site ou de cortesia): criar a instalação alojada.
+async function licencaParaCriar(db: D1Database, chave: string | undefined): Promise<Licenca | string> {
+  const l = await licencaParaInstalar(db, chave);
+  if (typeof l === "string") return l;
+  if (l.url_instalacao) return `Esta licença já tem uma instalação: ${l.url_instalacao}`;
+  return l;
+}
+
+app.get("/criar", async (c) => {
+  const l = await licencaParaCriar(c.env.DB, c.req.query("chave"));
+  if (typeof l === "string") return c.html(paginaMensagem("Não é possível criar", l), 400);
+  return c.html(paginaCriar(l.chave, { sufixo: sufixoEndereco(c.env) }));
+});
+
+app.post("/criar", async (c) => {
+  const b = await c.req.parseBody<Record<string, string>>();
+  const l = await licencaParaCriar(c.env.DB, b.chave);
+  if (typeof l === "string") return c.html(paginaMensagem("Não é possível criar", l), 400);
+  const slug = slugValido(b.slug);
+  if (!slug) return c.html(paginaCriar(l.chave, { erro: "Nome do endereço inválido: 3 a 30 letras minúsculas, números ou hífens.", slug: b.slug, sufixo: sufixoEndereco(c.env) }), 400);
+  const res = await criarAlojada(c, l, slug);
+  if (typeof res === "string") return c.html(paginaCriar(l.chave, { erro: res, slug, sufixo: sufixoEndereco(c.env) }), 400);
+  return c.html(paginaInstalado(res));
+});
+
+// Subscrição de uma licença existente (fim do período experimental): o checkout fica ligado a ela.
+app.get("/assinar", async (c) => {
+  const l = await obterLicencaPorChave(c.env.DB, String(c.req.query("chave") ?? "").trim().toUpperCase());
+  if (!l) return c.html(paginaMensagem("Licença desconhecida", "Confirme o link."), 404);
+  if (!vendasAbertas(c.env)) return c.html(paginaMensagem("Em breve", "As subscrições ainda não estão abertas. Contacte-nos."), 403);
+  return c.html(paginaAssinar(l.chave, {
+    precoCents: await precoMensal(c.env),
+    alojamentos: Math.max(1, l.alojamentos_ativos ?? 1),
+    ativa: l.tipo === "stripe" && estadoLicenca(l) === "ativa",
+  }));
+});
+
+app.post("/assinar", async (c) => {
+  const b = await c.req.parseBody<Record<string, string>>();
+  const l = await obterLicencaPorChave(c.env.DB, String(b.chave ?? "").trim().toUpperCase());
+  if (!l || !vendasAbertas(c.env)) return c.html(paginaMensagem("Não é possível subscrever", "Contacte-nos."), 400);
+  const n = Number(b.alojamentos);
+  if (!Number.isInteger(n) || n < 1 || n > 50) return c.html(paginaAssinar(l.chave, { precoCents: await precoMensal(c.env), alojamentos: 1, erro: "Indique entre 1 e 50 alojamentos." }), 400);
+  const email = l.cliente_id ? await c.env.DB.prepare("SELECT email FROM clientes WHERE id = ?").bind(l.cliente_id).first<string>("email") : null;
+  const base = urlBase(c);
+  const sessao = await stripe<{ url: string }>(c.env.STRIPE_SECRET_KEY!, "POST", "/checkout/sessions", {
+    mode: "subscription",
+    client_reference_id: String(l.id),
+    customer_email: email ?? undefined,
+    line_items: [{ price: c.env.STRIPE_PRECO, quantity: n, adjustable_quantity: { enabled: true, minimum: 1, maximum: 50 } }],
+    success_url: `${base}/obrigado?sessao={CHECKOUT_SESSION_ID}`,
+    cancel_url: `${base}/assinar?chave=${encodeURIComponent(l.chave)}`,
+    locale: "pt",
+    billing_address_collection: "required",
+    tax_id_collection: { enabled: true },
+    allow_promotion_codes: true,
+  });
+  return c.redirect(sessao.url, 303);
+});
+
+// Atualiza as instalações alojadas para a versão mais recente (algumas por execução, por causa do limite de
+// pedidos por execução do Cloudflare). Corre de hora a hora.
+const ALOJADAS_POR_EXECUCAO = 5;
+
+async function atualizarAlojadas(env: Env): Promise<void> {
+  if (!alojamentoDisponivel(env)) return;
+  const v = await versaoParaInstalar(env.DB);
+  if (!v) return;
+  const alojadas = (await env.DB.prepare("SELECT * FROM licencas WHERE modo = 'alojado' AND slug IS NOT NULL AND cf_base IS NOT NULL ORDER BY erro_atualizacao IS NOT NULL, id").all<Licenca>()).results;
+  for (const l of alojadas.filter((x) => precisaAtualizar(x.versao_publicada, v.versao)).slice(0, ALOJADAS_POR_EXECUCAO)) {
+    try {
+      await atualizarAlojada(env.CF_API_TOKEN!, env.CF_CONTA!, nomeAlojado(l.slug!), l.cf_base!, v, env.CF_API_URL || undefined);
+      await env.DB.prepare("UPDATE licencas SET versao_publicada = ?, erro_atualizacao = NULL WHERE id = ?").bind(v.versao, l.id).run();
+    } catch (e) {
+      console.error(`Atualização de ${l.slug} falhou`, e);
+      await env.DB.prepare("UPDATE licencas SET erro_atualizacao = ? WHERE id = ?").bind(String(e).slice(0, 300), l.id).run();
+    }
+  }
+}
 
 // ---------- Email de recuperação (pedido por uma instalação) ----------
 
@@ -415,6 +639,7 @@ async function enviarChaveCortesia(env: Env, licencaId: number, base: string): P
         chave: l.chave,
         nome: l.nome,
         alojamentos: l.alojamentos_pagos,
+        linkCriar: `${base}/criar?chave=${encodeURIComponent(l.chave)}`,
         linkInstalar: `${base}/instalar?chave=${encodeURIComponent(l.chave)}`,
       }),
     });
@@ -485,4 +710,9 @@ app.post("/gestao/faturas/:id/manual", async (c) => {
   return c.redirect("/gestao/faturas");
 });
 
-export default app;
+export default {
+  fetch: app.fetch,
+  async scheduled(_evento: ScheduledController, env: Env, ctx: ExecutionContext) {
+    ctx.waitUntil(atualizarAlojadas(env));
+  },
+} satisfies ExportedHandler<Env>;

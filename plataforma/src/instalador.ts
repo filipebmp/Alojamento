@@ -1,18 +1,30 @@
-// Instala o bookgest na conta Cloudflare do gestor, com a chave de API que ele criou.
-// A chave é usada só durante este pedido e guardada como segredo na conta dele (para as atualizações
-// automáticas); a plataforma não a guarda.
+// Cria (ou reinstala) uma instalação do bookgest numa conta Cloudflare:
+// - modo "privado": na conta do gestor, com a chave de API que ele criou. A chave fica como segredo na
+//   conta dele (para a atualização automática); a plataforma não a guarda.
+// - modo "alojado": na conta do fornecedor, uma app e uma base por cliente. A plataforma atualiza-as.
 
 import { type Binding, Cloudflare, ErroCloudflare } from "../../comum/cloudflare";
-import type { Versao } from "../../comum/versoes";
+import { type Versao, compararVersoes } from "../../comum/versoes";
 
-export const NOME_SCRIPT = "bookgest";
-export const NOME_BASE = "bookgest";
+export const NOME_PRIVADO = "bookgest";
 export const CRON_DIARIO = "17 4 * * *";
+export const PLATAFORMA_SCRIPT = "bookgest-plataforma";
 
 export interface ResultadoInstalacao {
   url: string;
   tokenConfiguracao: string | null; // null = já havia utilizadores (reinstalação)
   reinstalacao: boolean;
+  conta: string;
+  base: string;
+}
+
+export interface OpcoesInstalacao {
+  versao: Versao;
+  chaveLicenca: string;
+  urlLicencas: string;
+  apiCloudflare?: string;
+  // Alojado: conta do fornecedor e nome da instalação; privado: primeira conta da chave, nome "bookgest".
+  alojado?: { conta: string; nome: string };
 }
 
 const aleatorio = (n: number) =>
@@ -23,15 +35,24 @@ async function sha256(s: string): Promise<string> {
   return [...new Uint8Array(d)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-export async function instalar(
-  token: string,
-  d: { versao: Versao; chaveLicenca: string; urlLicencas: string; apiCloudflare?: string },
-): Promise<ResultadoInstalacao> {
-  const cf = new Cloudflare(token, d.apiCloudflare);
+// Nome do endereço escolhido pelo cliente (modo alojado): bk-<slug> é o nome da app e da base.
+export function slugValido(s: string | undefined): string | null {
+  const x = s?.trim().toLowerCase();
+  return x && /^[a-z0-9](?:[a-z0-9-]{1,28}[a-z0-9])$/.test(x) && !x.includes("--") ? x : null;
+}
 
-  const contas = await cf.pedido<{ id: string; name: string }[]>("GET", "/accounts");
-  if (!contas.length) throw new ErroCloudflare("A chave não dá acesso a nenhuma conta. Confirme as permissões da chave.");
-  const conta = contas[0].id;
+export const nomeAlojado = (slug: string) => `bk-${slug}`;
+
+export async function instalar(token: string, d: OpcoesInstalacao): Promise<ResultadoInstalacao> {
+  const cf = new Cloudflare(token, d.apiCloudflare);
+  const nome = d.alojado?.nome ?? NOME_PRIVADO;
+
+  let conta = d.alojado?.conta;
+  if (!conta) {
+    const contas = await cf.pedido<{ id: string; name: string }[]>("GET", "/accounts");
+    if (!contas.length) throw new ErroCloudflare("A chave não dá acesso a nenhuma conta. Confirme as permissões da chave.");
+    conta = contas[0].id;
+  }
 
   // Subdomínio workers.dev da conta (contas novas ainda não têm).
   let subdominio: string;
@@ -40,25 +61,30 @@ export async function instalar(
   } catch {
     subdominio = (await cf.pedido<{ subdomain: string }>("PUT", `/accounts/${conta}/workers/subdomain`, { subdomain: `bookgest-${aleatorio(6)}` })).subdomain;
   }
-  const url = `https://${NOME_SCRIPT}.${subdominio}.workers.dev`;
+  const url = `https://${nome}.${subdominio}.workers.dev`;
 
   // Base de dados: reutiliza a existente numa reinstalação (os dados do gestor nunca são apagados).
-  const existentes = await cf.pedido<{ uuid: string; name: string }[]>("GET", `/accounts/${conta}/d1/database?name=${NOME_BASE}`);
-  const base = existentes.find((b) => b.name === NOME_BASE)?.uuid
-    ?? (await cf.pedido<{ uuid: string }>("POST", `/accounts/${conta}/d1/database`, { name: NOME_BASE })).uuid;
+  const existentes = await cf.pedido<{ uuid: string; name: string }[]>("GET", `/accounts/${conta}/d1/database?name=${nome}`);
+  const base = existentes.find((b) => b.name === nome)?.uuid
+    ?? (await cf.pedido<{ uuid: string }>("POST", `/accounts/${conta}/d1/database`, { name: nome })).uuid;
   await cf.aplicarMigracoes(conta, base, d.versao.migracoes);
 
   const bindings: Binding[] = [
     { type: "d1", name: "DB", id: base },
     { type: "plain_text", name: "URL_PUBLICO", text: url },
     { type: "plain_text", name: "URL_LICENCAS", text: d.urlLicencas },
-    { type: "plain_text", name: "CF_CONTA", text: conta },
-    { type: "plain_text", name: "CF_SCRIPT", text: NOME_SCRIPT },
-    { type: "secret_text", name: "CF_API_TOKEN", text: token },
+    ...(d.alojado
+      // Na conta do fornecedor, o Cloudflare não deixa um Worker chamar outro pelo workers.dev: ligação direta.
+      ? [{ type: "service", name: "PLATAFORMA", service: PLATAFORMA_SCRIPT } as const]
+      : [
+          { type: "plain_text", name: "CF_CONTA", text: conta } as const,
+          { type: "plain_text", name: "CF_SCRIPT", text: nome } as const,
+          { type: "secret_text", name: "CF_API_TOKEN", text: token } as const,
+        ]),
   ];
-  await cf.publicarScript(conta, NOME_SCRIPT, d.versao, bindings);
-  await cf.pedido("POST", `/accounts/${conta}/workers/scripts/${NOME_SCRIPT}/subdomain`, { enabled: true, previews_enabled: false });
-  await cf.pedido("PUT", `/accounts/${conta}/workers/scripts/${NOME_SCRIPT}/schedules`, [{ cron: CRON_DIARIO }]);
+  await cf.publicarScript(conta, nome, d.versao, bindings);
+  await cf.pedido("POST", `/accounts/${conta}/workers/scripts/${nome}/subdomain`, { enabled: true, previews_enabled: false });
+  await cf.pedido("PUT", `/accounts/${conta}/workers/scripts/${nome}/schedules`, [{ cron: CRON_DIARIO }]);
 
   // Chave de licença e, numa instalação nova, o código de uso único que abre o assistente de primeiro arranque.
   const utilizadores = await cf.consultar<{ n: number }>(conta, base, "SELECT COUNT(*) AS n FROM utilizadores");
@@ -68,5 +94,16 @@ export async function instalar(
   if (tokenConfiguracao) {
     await cf.consultar(conta, base, "INSERT OR REPLACE INTO definicoes (chave, valor) VALUES ('token_configuracao', ?)", [await sha256(tokenConfiguracao)]);
   }
-  return { url, tokenConfiguracao, reinstalacao };
+  return { url, tokenConfiguracao, reinstalacao, conta, base };
+}
+
+// Atualiza uma instalação alojada para a versão indicada: migrações em falta e novo código (mantendo as ligações).
+export async function atualizarAlojada(token: string, conta: string, nome: string, base: string, v: Versao, apiCloudflare?: string) {
+  const cf = new Cloudflare(token, apiCloudflare);
+  await cf.aplicarMigracoes(conta, base, v.migracoes);
+  await cf.publicarScript(conta, nome, v, "manter");
+}
+
+export function precisaAtualizar(publicada: string | null, atual: string): boolean {
+  return !publicada || compararVersoes(atual, publicada) > 0;
 }

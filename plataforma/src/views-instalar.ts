@@ -67,3 +67,74 @@ export function paginaInstalado(r: ResultadoInstalacao) {
     <p><a class="botao grande" href="${link}">${r.reinstalacao ? "Entrar" : "Criar a minha conta"}</a></p>
     <p class="nota">Se o endereço ainda não abrir, espere um ou dois minutos: o Cloudflare está a ativá-lo.</p>`);
 }
+
+// ---------- Modo "Simples" (alojado pelo bookgest) ----------
+
+const campoEndereco = (slug: string, sufixo: string) => html`
+  <label>Nome do endereço <input name="slug" required value="${slug}" pattern="[a-z0-9][a-z0-9-]{1,28}[a-z0-9]"
+    placeholder="casa-da-praia" autocapitalize="none" spellcheck="false"></label>
+  <p class="nota">Letras minúsculas, números e hífens. O seu bookgest fica em <strong>${sufixo}</strong>.</p>`;
+
+export function paginaRegistar(opcoes: { erro?: string; enviado?: boolean; nome?: string; email?: string; slug?: string; sufixo: string }) {
+  if (opcoes.enviado) {
+    return pagina("Confirme o seu email", html`<h1>Confirme o seu email</h1>
+      <p>Enviámos um link para <strong>${opcoes.email}</strong>. Abra-o para criar o seu bookgest.</p>
+      <p class="nota">Não chegou? Veja a pasta de spam. O link é válido durante 48 horas.</p>`);
+  }
+  return pagina("Experimentar o bookgest", html`<h1>Experimentar 30 dias grátis</h1>
+    <p>Sem cartão. No fim, decide se quer continuar.</p>
+    ${opcoes.erro ? html`<p class="erro">${opcoes.erro}</p>` : ""}
+    <form method="post" action="/registar">
+      <label>Nome <input name="nome" value="${opcoes.nome ?? ""}" autocomplete="name"></label>
+      <label>Email <input type="email" name="email" required value="${opcoes.email ?? ""}" autocomplete="email"></label>
+      ${campoEndereco(opcoes.slug ?? "", opcoes.sufixo)}
+      <label class="opcao"><input type="checkbox" name="termos" value="1" required>
+        Aceito os <a href="/termos" target="_blank">termos de utilização e de tratamento de dados</a></label>
+      <button type="submit">Criar o meu bookgest</button>
+    </form>
+    <p class="nota">Prefere que os dados fiquem numa conta Cloudflare sua? Depois de subscrever pode usar o
+      <a href="/instalar">instalador</a>.</p>`);
+}
+
+export function paginaCriar(chave: string, opcoes: { erro?: string; slug?: string; sufixo: string }) {
+  return pagina("Criar o seu bookgest", html`<h1>Criar o seu bookgest</h1>
+    <p>Alojado pelo bookgest: fica pronto em menos de um minuto.</p>
+    ${opcoes.erro ? html`<p class="erro">${opcoes.erro}</p>` : ""}
+    <form method="post" action="/criar" onsubmit="this.querySelector('button').disabled = true; this.querySelector('button').textContent = 'A criar…'">
+      <input type="hidden" name="chave" value="${chave}">
+      ${campoEndereco(opcoes.slug ?? "", opcoes.sufixo)}
+      <button type="submit">Criar</button>
+    </form>
+    <p class="nota">Ou <a href="/instalar?chave=${encodeURIComponent(chave)}">instalar numa conta Cloudflare sua</a>.</p>`);
+}
+
+export function paginaAssinar(chave: string, opcoes: { precoCents: number | null; alojamentos: number; erro?: string; ativa?: boolean }) {
+  const preco = opcoes.precoCents != null ? (opcoes.precoCents / 100).toLocaleString("pt-PT", { style: "currency", currency: "EUR" }) : null;
+  return pagina("Subscrever", html`<h1>Continuar a usar o bookgest</h1>
+    ${opcoes.erro ? html`<p class="erro">${opcoes.erro}</p>` : ""}
+    ${opcoes.ativa
+      ? html`<p>✅ Esta licença já tem uma assinatura ativa.</p>`
+      : html`${preco ? html`<p><strong>${preco}</strong> por alojamento, por mês (IVA incluído). Sem fidelização.</p>` : ""}
+        <form method="post" action="/assinar" class="linha">
+          <input type="hidden" name="chave" value="${chave}">
+          <label>Alojamentos <input type="number" name="alojamentos" min="1" max="50" value="${opcoes.alojamentos}" required></label>
+          <button type="submit">Subscrever</button>
+        </form>
+        <p class="nota">A sua instalação e os seus dados mantêm-se: só muda a licença.</p>`}`);
+}
+
+export function paginaTermos(contacto: string | null) {
+  return pagina("Termos", html`<h1>Termos de utilização e tratamento de dados</h1>
+    <p class="aviso">Versão provisória, em revisão jurídica.</p>
+    <h2>Quem somos</h2>
+    <p>O bookgest é um serviço de gestão de Alojamento Local${contacto ? html` (contacto: <a href="mailto:${contacto}">${contacto}</a>)` : ""}.</p>
+    <h2>Os dados dos seus hóspedes</h2>
+    <p>O gestor é o responsável pelo tratamento dos dados dos seus hóspedes. No modo alojado, o bookgest trata-os
+      apenas por conta do gestor, como subcontratante (art. 28.º do RGPD): numa base de dados separada para cada
+      cliente, sem os consultar, ceder ou usar para outros fins, e apaga-os quando o gestor deixar o serviço e o pedir.
+      No modo privado (conta Cloudflare do gestor), o bookgest não tem acesso a eles.</p>
+    <p>A infraestrutura é da Cloudflare (subcontratante ulterior), com dados guardados na União Europeia ou ao abrigo
+      das cláusulas contratuais-tipo.</p>
+    <h2>Os seus dados de cliente</h2>
+    <p>Nome, email, dados de faturação e número de alojamentos, para gerir a licença, faturar e dar apoio.</p>`);
+}

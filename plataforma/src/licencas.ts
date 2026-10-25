@@ -5,7 +5,7 @@ export interface Licenca {
   id: number;
   chave: string;
   cliente_id: number | null;
-  tipo: "stripe" | "cortesia";
+  tipo: "stripe" | "cortesia" | "teste";
   stripe_checkout_id: string | null;
   stripe_subscription_id: string | null;
   stripe_estado: string | null;
@@ -17,6 +17,12 @@ export interface Licenca {
   ultima_comunicacao: string | null;
   url_instalacao: string | null;
   instalada_em: string | null;
+  modo: "alojado" | "privado" | null;
+  valida_ate: string | null;
+  slug: string | null;
+  cf_base: string | null;
+  versao_publicada: string | null;
+  erro_atualizacao: string | null;
   criado_em: string;
   atualizado_em: string;
 }
@@ -34,9 +40,10 @@ export interface Cliente {
 }
 
 // Estados da assinatura no Stripe → estado da licença comunicado à instalação.
-export function estadoLicenca(l: Pick<Licenca, "tipo" | "stripe_estado" | "revogada">): EstadoLicenca {
+export function estadoLicenca(l: Pick<Licenca, "tipo" | "stripe_estado" | "revogada" | "valida_ate">, agora = new Date()): EstadoLicenca {
   if (l.revogada) return "inativa";
   if (l.tipo === "cortesia") return "ativa";
+  if (l.tipo === "teste") return l.valida_ate && l.valida_ate > agora.toISOString() ? "ativa" : "inativa";
   switch (l.stripe_estado) {
     case "active":
     case "trialing":
@@ -93,8 +100,39 @@ export async function guardarCliente(
   return (await db.prepare("SELECT id FROM clientes WHERE stripe_customer_id = ?").bind(stripeId).first<number>("id"))!;
 }
 
+export const DIAS_TESTE = 30;
+export const ALOJAMENTOS_TESTE = 3;
+
+export async function criarTeste(db: D1Database, clienteId: number, agora = new Date()): Promise<number> {
+  const iso = agora.toISOString();
+  const ate = new Date(agora.getTime() + DIAS_TESTE * 86_400_000).toISOString();
+  const res = await db.prepare(
+    "INSERT INTO licencas (chave, cliente_id, tipo, alojamentos_pagos, valida_ate, criado_em, atualizado_em) VALUES (?, ?, 'teste', ?, ?, ?, ?)",
+  )
+    .bind(gerarChave(), clienteId, ALOJAMENTOS_TESTE, ate, iso, iso)
+    .run();
+  return res.meta.last_row_id;
+}
+
 // Chamado pelo webhook e pela página de agradecimento (a que chegar primeiro cria a licença).
+// Com client_reference_id (subscrição a partir de um período experimental), a licença existente passa a paga.
 export async function garantirLicencaCheckout(db: D1Database, s: CheckoutSession, sub: Subscription): Promise<Licenca> {
+  const existente = Number(s.client_reference_id);
+  if (existente) {
+    await db.prepare(
+      `UPDATE licencas SET tipo = 'stripe', stripe_checkout_id = ?, stripe_subscription_id = ?, stripe_estado = ?, alojamentos_pagos = ?,
+         valida_ate = NULL, atualizado_em = ? WHERE id = ? AND tipo IN ('teste', 'stripe')`,
+    )
+      .bind(s.id, sub.id, sub.status, quantidade(sub), agoraIso(), existente)
+      .run();
+    if (s.customer) {
+      await db.prepare("UPDATE clientes SET stripe_customer_id = COALESCE(stripe_customer_id, ?) WHERE id = (SELECT cliente_id FROM licencas WHERE id = ?)")
+        .bind(s.customer, existente)
+        .run();
+    }
+    const l = await obterLicencaPorCheckout(db, s.id);
+    if (l) return l;
+  }
   const clienteId = s.customer
     ? await guardarCliente(db, s.customer, {
         email: s.customer_details?.email,

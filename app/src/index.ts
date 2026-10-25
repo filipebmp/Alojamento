@@ -645,7 +645,11 @@ async function mostrarDefinicoes(c: Ctx, opcoes: { erro?: string; guardado?: boo
   return c.html(
     paginaDefinicoes({
       ...opcoes,
-      licenca: { ...licenca, aviso: avisoLicenca(licenca.chave, licenca.estado, ativos, new Date()) },
+      licenca: {
+        ...licenca,
+        aviso: avisoLicenca(licenca.chave, licenca.estado, ativos, new Date()),
+        linkAssinar: licenca.chave ? `${c.env.URL_LICENCAS || URL_LICENCAS_PREDEFINIDO}/assinar?chave=${encodeURIComponent(licenca.chave)}` : null,
+      },
       versao: { atual: VERSAO, automatica: !!c.env.CF_API_TOKEN, ultima: licenca.atualizacao },
     }),
     opcoes.erro ? 400 : 200,
@@ -810,7 +814,12 @@ async function verificarLicenca(env: Env): Promise<void> {
   const alojamentos = (await env.DB.prepare("SELECT COUNT(*) AS n FROM alojamentos WHERE ativo = 1").first<number>("n")) ?? 0;
   try {
     const r = await consultarLicenca(env.URL_LICENCAS || URL_LICENCAS_PREDEFINIDO, { chave, versao: VERSAO, alojamentos }, env.PLATAFORMA);
-    const guardado: EstadoGuardado = { estado: r.estado, alojamentosPagos: r.alojamentosPagos, verificadoEm: new Date().toISOString() };
+    const guardado: EstadoGuardado = {
+      estado: r.estado,
+      alojamentosPagos: r.alojamentosPagos,
+      fimTeste: r.fimTeste ?? null,
+      verificadoEm: new Date().toISOString(),
+    };
     await gravarDefinicao(env.DB, "licenca_estado", JSON.stringify(guardado));
     await env.DB.prepare("DELETE FROM definicoes WHERE chave = 'licenca_erro'").run();
     // Conta desde quando há um problema (licença ou alojamentos a mais), para o bloqueio de novas reservas.
