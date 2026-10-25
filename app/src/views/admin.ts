@@ -38,7 +38,7 @@ export function paginaLogin(opcoes: { erro?: string; legado?: boolean; email?: s
 export function paginaNovaReserva(
   alojamentos: Alojamento[],
   papel: Papel,
-  s: { nome?: string; checkin?: string; checkout?: string; n?: string; ref?: string } = {},
+  s: { nome?: string; checkin?: string; checkout?: string; n?: string; ref?: string; origem?: string } = {},
 ) {
   return pagina("Nova reserva", html`<h1>Nova reserva</h1>
     <form method="post" action="/admin/reservas">
@@ -47,6 +47,7 @@ export function paginaNovaReserva(
         : html`<label>Alojamento <select name="alojamento_id" required>
             <option value=""></option>
             ${alojamentos.map((a) => html`<option value="${a.id}">${a.nome}</option>`)}</select></label>`}
+      ${campoOrigem(s.origem || "booking")}
       <label>Nome do titular <input name="nome_titular" required value="${s.nome ?? ""}"></label>
       <label>Referência da reserva <input name="ref_booking" value="${s.ref ?? ""}"></label>
       <label>Check-in <input type="date" name="checkin" required value="${s.checkin ?? ""}"></label>
@@ -55,11 +56,17 @@ export function paginaNovaReserva(
       ${papel === "gestor"
         ? html`<label>Valor total pago pelo hóspede (€, sem taxa turística)
             <input name="valor_total" inputmode="decimal" placeholder="0,00"></label>
-          <label>Comissão Booking (€) <input name="comissao" inputmode="decimal" placeholder="0,00"></label>`
+          <label>Comissão da plataforma (€) <input name="comissao" inputmode="decimal" placeholder="0,00"></label>`
         : ""}
       <button type="submit">Criar</button>
     </form>`, { admin: papel === "gestor" ? true : "equipa", seccao: "reservas" });
 }
+
+// Origem guardada em reservas.origem ("manual" = reserva direta).
+export const ORIGENS: [string, string][] = [["booking", "Booking"], ["airbnb", "Airbnb"], ["manual", "Direta"], ["outra", "Outra"]];
+
+const campoOrigem = (atual: string) => html`<label>Plataforma
+  <select name="origem">${ORIGENS.map(([v, t]) => html`<option value="${v}"${v === atual ? " selected" : ""}>${t}</option>`)}</select></label>`;
 
 const NOMES_DOC: Record<string, string> = { P: "Passaporte", B: "Bilhete de identidade", O: "Outro" };
 
@@ -172,7 +179,7 @@ export function paginaReserva(
         </section>`
       : ""}
 
-    ${r.incompleta || r.origem !== "manual"
+    ${r.incompleta || r.uid_externo
       ? html`<section class="cartao ${r.incompleta ? "aviso" : ""}" id="dados">
           <h2>Dados da reserva</h2>
           ${r.incompleta
@@ -255,7 +262,7 @@ export function paginaReserva(
         Dormidas: ${tmt.dormidasTotais} totais · ${tmt.dormidasTributaveis} tributáveis ·
         ${regras.maxNoites ? html`${tmt.dormidasAcimaLimite} não sujeitas (além de ${regras.maxNoites} noites) · ` : ""}${tmt.dormidasMenores} isentas (menores)
         ${hospedes.length < r.n_hospedes ? html`<br><small>Provisório: faltam hóspedes.</small>` : ""}</p>
-      <p>Cobrada pelo Booking: ${r.tmt_cobrada_cents == null ? "—" : euros(r.tmt_cobrada_cents)}</p>
+      <p>Cobrada pela plataforma: ${r.tmt_cobrada_cents == null ? "—" : euros(r.tmt_cobrada_cents)}</p>
     </section>`
       : ""}
 
@@ -264,8 +271,9 @@ export function paginaReserva(
       <form method="post" action="/admin/reservas/${r.id}/valores">
         <label>Valor total pago pelo hóspede (€, sem taxa turística)
           <input name="valor_total" inputmode="decimal" value="${centsParaInput(r.valor_total_cents)}"></label>
-        <label>Comissão Booking (€) <input name="comissao" inputmode="decimal" value="${centsParaInput(r.comissao_cents)}"></label>
-        <label>Taxa turística cobrada pelo Booking (€)
+        ${r.uid_externo ? "" : campoOrigem(r.origem)}
+        <label>Comissão da plataforma (€) <input name="comissao" inputmode="decimal" value="${centsParaInput(r.comissao_cents)}"></label>
+        <label>Taxa turística cobrada pela plataforma (€)
           <input name="tmt_cobrada" inputmode="decimal" value="${r.tmt_cobrada_cents == null ? "" : centsParaInput(r.tmt_cobrada_cents)}"></label>
         <button>Guardar</button>
       </form>
@@ -743,7 +751,7 @@ const NOMES_ESTADO_EMAIL: Record<string, string> = { associado: "✅ associado",
 export function paginaEmails(o: { endereco: string | null; privado: boolean; emails: EmailRecebido[]; erro: string | null; verificado?: boolean }) {
   const linha = (e: EmailRecebido) => {
     const d = JSON.parse(e.dados) as DadosEmailReserva;
-    const criar = `/admin/reservas/nova?${new URLSearchParams({ nome: d.nome ?? "", checkin: d.checkin ?? "", checkout: d.checkout ?? "", n: String(d.hospedes ?? ""), ref: d.codigo ?? "" })}`;
+    const criar = `/admin/reservas/nova?${new URLSearchParams({ nome: d.nome ?? "", checkin: d.checkin ?? "", checkout: d.checkout ?? "", n: String(d.hospedes ?? ""), ref: d.codigo ?? "", origem: d.plataforma === "desconhecida" ? "" : d.plataforma })}`;
     return html`<section class="cartao">
       <p><strong>${d.assunto || "(sem assunto)"}</strong><br>
         <small>${dataPt(e.recebido_em)} · ${d.plataforma === "desconhecida" ? "" : `${d.plataforma === "airbnb" ? "Airbnb" : "Booking"} · `}${NOMES_ESTADO_EMAIL[e.estado] ?? e.estado}</small></p>

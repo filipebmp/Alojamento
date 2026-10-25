@@ -11,10 +11,9 @@ import { type NomeIcone, dataExtenso, dataPt, diaSemana, icone, mesCurto, pagina
 
 export type Origem = "booking" | "airbnb" | "direta" | "outra";
 
-// Reservas manuais com o n.º do Booking (9 a 11 dígitos) contam como Booking.
+// "manual" = reserva direta (criada no bookgest sem plataforma).
 export function origemReserva(r: Pick<Reserva, "origem" | "ref_booking">): Origem {
-  if (r.origem === "booking" || r.origem === "airbnb" || r.origem === "outra") return r.origem;
-  return r.ref_booking && /^\d{9,11}$/.test(r.ref_booking.trim()) ? "booking" : "direta";
+  return r.origem === "booking" || r.origem === "airbnb" || r.origem === "outra" ? r.origem : "direta";
 }
 
 const NOMES_ORIGEM: Record<Origem, string> = { booking: "Booking", airbnb: "Airbnb", direta: "Direta", outra: "Outra" };

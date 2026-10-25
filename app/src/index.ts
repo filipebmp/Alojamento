@@ -398,6 +398,8 @@ app.get("/admin", async (c) => {
   }));
 });
 
+const origemValida = (v: string | undefined) => (["booking", "airbnb", "manual", "outra"].includes(v ?? "") ? v! : "manual");
+
 function filtroAlojamento(c: Ctx, ativos: Alojamento[]): number | null {
   const id = Number(c.req.query("alojamento"));
   return ativos.length > 1 && ativos.some((a) => a.id === id) ? id : null;
@@ -443,7 +445,7 @@ app.get("/admin/reservas/nova", async (c) => {
   if (!ativos.length) return papel(c) === "gestor" ? c.redirect("/admin/alojamentos/novo") : c.html(paginaSemAcesso());
   const q = (k: string) => c.req.query(k) ?? "";
   // Pré-preenchida a partir de um email de reserva que não foi possível associar.
-  const sugestao = { nome: q("nome"), checkin: q("checkin"), checkout: q("checkout"), n: q("n"), ref: q("ref") };
+  const sugestao = { nome: q("nome"), checkin: q("checkin"), checkout: q("checkout"), n: q("n"), ref: q("ref"), origem: q("origem") };
   return c.html(paginaNovaReserva(ativos, papel(c), sugestao));
 });
 
@@ -460,11 +462,11 @@ app.post("/admin/reservas", async (c) => {
     return c.text("Dados inválidos: confirme nome, datas e n.º de hóspedes.", 400);
   }
   const res = await c.env.DB.prepare(
-    `INSERT INTO reservas (alojamento_id, token, ref_booking, nome_titular, checkin, checkout, n_hospedes, valor_total_cents, comissao_cents, criado_em)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO reservas (alojamento_id, token, ref_booking, nome_titular, checkin, checkout, n_hospedes, valor_total_cents, comissao_cents, origem, criado_em)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   )
     .bind(alojamento.id, gerarToken(), b.ref_booking?.trim() || null, b.nome_titular.trim(), checkin, checkout, n,
-      cents(b.valor_total) ?? 0, cents(b.comissao) ?? 0, new Date().toISOString())
+      cents(b.valor_total) ?? 0, cents(b.comissao) ?? 0, origemValida(b.origem), new Date().toISOString())
     .run();
   return c.redirect(`/admin/reservas/${res.meta.last_row_id}`);
 });
@@ -486,6 +488,10 @@ app.post("/admin/reservas/:id/valores", async (c) => {
   await c.env.DB.prepare("UPDATE reservas SET valor_total_cents = ?, comissao_cents = ?, tmt_cobrada_cents = ? WHERE id = ?")
     .bind(cents(b.valor_total) ?? 0, cents(b.comissao) ?? 0, cents(b.tmt_cobrada), Number(c.req.param("id")))
     .run();
+  // A plataforma só se muda nas reservas que não vêm de um calendário importado.
+  if (b.origem) {
+    await c.env.DB.prepare("UPDATE reservas SET origem = ? WHERE id = ? AND uid_externo IS NULL").bind(origemValida(b.origem), Number(c.req.param("id"))).run();
+  }
   return c.redirect(`/admin/reservas/${c.req.param("id")}`);
 });
 
