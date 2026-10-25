@@ -8,7 +8,7 @@ import {
   pedidoValido,
 } from "../../comum/licenca";
 import { iguais } from "../../comum/senha";
-import { type ConfigEmail, emailRecuperacao, enviarEmail, hashEmail } from "./email";
+import { type ConfigEmail, emailLicencaCortesia, emailRecuperacao, enviarEmail, hashEmail } from "./email";
 import { type ConfigInvoiceXpress, type Fatura, emitirFatura, registarFatura } from "./faturas";
 import {
   type Cliente,
@@ -270,7 +270,7 @@ app.use("/gestao/licencas", exigirSessao);
 app.use("/gestao/faturas", exigirSessao);
 app.use("/gestao/faturas/*", exigirSessao);
 
-async function mostrarLicencas(c: Ctx, novaChave?: string) {
+async function mostrarLicencas(c: Ctx, novaChave?: string, mensagem?: { ok: boolean; texto: string }) {
   const [licencas, clientes] = await Promise.all([
     c.env.DB.prepare("SELECT * FROM licencas ORDER BY id DESC").all<Licenca>(),
     c.env.DB.prepare("SELECT * FROM clientes").all<Cliente>(),
@@ -294,23 +294,57 @@ async function mostrarLicencas(c: Ctx, novaChave?: string) {
     { nome: "Email (Resend)", ok: !!configEmail(env), detalhe: configEmail(env)?.remetente ?? "segredo RESEND_API_KEY em falta" },
     { nome: "InvoiceXpress", ok: !!configInvoiceXpress(env), detalhe: configInvoiceXpress(env) ? env.INVOICEXPRESS_CONTA! : "não configurado (faturas à mão)" },
   ];
-  return c.html(paginaLicencas(licencas.results.map((l) => ({ licenca: l, cliente: l.cliente_id ? porId.get(l.cliente_id) ?? null : null })), estado, novaChave));
+  return c.html(paginaLicencas(licencas.results.map((l) => ({ licenca: l, cliente: l.cliente_id ? porId.get(l.cliente_id) ?? null : null })), estado, novaChave, mensagem));
 }
 
 app.get("/gestao", async (c) => {
   const nova = Number(c.req.query("nova"));
   const chave = nova ? await c.env.DB.prepare("SELECT chave FROM licencas WHERE id = ?").bind(nova).first<string>("chave") : null;
-  return mostrarLicencas(c, chave ?? undefined);
+  const email = c.req.query("email");
+  const mensagem = email === "enviado"
+    ? { ok: true, texto: `Chave enviada por email para ${c.req.query("para") ?? ""}.` }
+    : email ? { ok: false, texto: `O email não foi enviado: ${email}` } : undefined;
+  return mostrarLicencas(c, chave ?? undefined, mensagem);
 });
+
+// Envia a chave de uma cortesia ao cliente. Devolve o parâmetro a pôr no endereço da página.
+async function enviarChaveCortesia(env: Env, licencaId: number): Promise<string> {
+  const cfg = configEmail(env);
+  if (!cfg) return "email=" + encodeURIComponent("Resend não configurado");
+  const l = await env.DB.prepare(
+    "SELECT l.chave, l.alojamentos_pagos, c.email, c.nome FROM licencas l JOIN clientes c ON c.id = l.cliente_id WHERE l.id = ? AND l.tipo = 'cortesia'",
+  )
+    .bind(licencaId)
+    .first<{ chave: string; alojamentos_pagos: number; email: string | null; nome: string | null }>();
+  if (!l?.email) return "email=" + encodeURIComponent("licença sem email");
+  try {
+    await enviarEmail(cfg, {
+      para: l.email,
+      responderPara: env.CONTACTO || null,
+      ...emailLicencaCortesia({ chave: l.chave, nome: l.nome, alojamentos: l.alojamentos_pagos }),
+    });
+    return `email=enviado&para=${encodeURIComponent(l.email)}`;
+  } catch (e) {
+    console.error("Envio da licença falhou", e);
+    return "email=" + encodeURIComponent(e instanceof Error ? e.message : String(e));
+  }
+}
 
 app.post("/gestao/licencas", async (c) => {
   const b = await c.req.parseBody<Record<string, string>>();
   const n = Number(b.alojamentos);
   if (!Number.isInteger(n) || n < 1 || n > 1000) return c.text("Número de alojamentos inválido.", 400);
-  const chave = await criarCortesia(c.env.DB, n, b.notas?.trim() || null);
-  const id = await c.env.DB.prepare("SELECT id FROM licencas WHERE chave = ?").bind(chave).first<number>("id");
+  const email = b.email?.trim().toLowerCase() || null;
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return c.text("Email inválido.", 400);
+  const nome = b.nome?.trim() || null;
+  const id = await criarCortesia(c.env.DB, n, b.notas?.trim() || null, email ? { email, nome } : null);
+  const envio = email && b.enviar ? `&${await enviarChaveCortesia(c.env, id)}` : "";
   // Redireciona: atualizar a página não volta a submeter o formulário (nem cria outra licença).
-  return c.redirect(`/gestao?nova=${id}`);
+  return c.redirect(`/gestao?nova=${id}${envio}`);
+});
+
+app.post("/gestao/licencas/:id/enviar", async (c) => {
+  return c.redirect(`/gestao?${await enviarChaveCortesia(c.env, Number(c.req.param("id")))}`);
 });
 
 // Só cortesias que nunca foram usadas por uma instalação (ex.: criadas por engano).

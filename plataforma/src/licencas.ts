@@ -122,15 +122,23 @@ export async function atualizarSubscricao(db: D1Database, sub: Subscription): Pr
     .run();
 }
 
-export async function criarCortesia(db: D1Database, alojamentos: number, notas: string | null): Promise<string> {
-  const chave = gerarChave();
+export async function criarCortesia(
+  db: D1Database,
+  alojamentos: number,
+  notas: string | null,
+  destinatario: { email: string; nome: string | null } | null,
+): Promise<number> {
   const agora = agoraIso();
-  await db.prepare(
-    "INSERT INTO licencas (chave, tipo, alojamentos_pagos, notas, criado_em, atualizado_em) VALUES (?, 'cortesia', ?, ?, ?, ?)",
+  // Cliente sem Stripe: só o necessário para lhe enviar a chave.
+  const clienteId = destinatario
+    ? (await db.prepare("INSERT INTO clientes (email, nome, criado_em) VALUES (?, ?, ?)").bind(destinatario.email, destinatario.nome, agora).run()).meta.last_row_id
+    : null;
+  const res = await db.prepare(
+    "INSERT INTO licencas (chave, cliente_id, tipo, alojamentos_pagos, notas, criado_em, atualizado_em) VALUES (?, ?, 'cortesia', ?, ?, ?, ?)",
   )
-    .bind(chave, alojamentos, notas, agora, agora)
+    .bind(gerarChave(), clienteId, alojamentos, notas, agora, agora)
     .run();
-  return chave;
+  return res.meta.last_row_id;
 }
 
 export async function registarComunicacao(db: D1Database, id: number, versao: string, alojamentos: number): Promise<void> {

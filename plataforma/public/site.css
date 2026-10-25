@@ -48,3 +48,5 @@ th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--bord
 code { font-size: .85rem; }
 .config { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 8px 0 0; }
 .config dd { margin: 0; overflow-wrap: anywhere; }
+label.opcao { display: flex; gap: 8px; align-items: center; font-weight: 400; }
+label.opcao input { width: auto; margin: 0; }

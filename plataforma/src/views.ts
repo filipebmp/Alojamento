@@ -138,9 +138,15 @@ export interface EstadoConfig {
   detalhe: string;
 }
 
-export function paginaLicencas(linhas: { licenca: Licenca; cliente: Cliente | null }[], config: EstadoConfig[], novaChave?: string) {
+export function paginaLicencas(
+  linhas: { licenca: Licenca; cliente: Cliente | null }[],
+  config: EstadoConfig[],
+  novaChave?: string,
+  mensagem?: { ok: boolean; texto: string },
+) {
   return pagina("Licenças", html`<h1>Licenças</h1>
     ${novaChave ? html`<p>✅ Licença de cortesia criada:</p><p class="chave">${novaChave}</p>` : ""}
+    ${mensagem ? html`<p class="${mensagem.ok ? "" : "erro"}">${mensagem.ok ? "✅ " : "⚠️ "}${mensagem.texto}</p>` : ""}
     <details class="cartao" ${config.every((x) => x.ok) ? "" : "open"}>
       <summary>Configuração ${config.every((x) => x.ok) ? "✅" : "⚠️"}</summary>
       <dl class="config">${config.map((x) => html`<dt>${x.ok ? "✅" : "⚠️"} ${x.nome}</dt><dd class="${x.ok ? "" : "erro"}">${x.detalhe}</dd>`)}</dl>
@@ -160,7 +166,10 @@ export function paginaLicencas(linhas: { licenca: Licenca; cliente: Cliente | nu
           <td>${l.versao ?? "—"}</td>
           <td>${dataPt(l.ultima_comunicacao)}</td>
           <td>${l.tipo === "cortesia"
-            ? html`<form method="post" action="/gestao/licencas/${l.id}/${l.revogada ? "reativar" : "revogar"}">
+            ? html`${c?.email && !l.revogada
+                ? html`<form method="post" action="/gestao/licencas/${l.id}/enviar"><button class="pequeno">Enviar por email</button></form>`
+                : ""}
+              <form method="post" action="/gestao/licencas/${l.id}/${l.revogada ? "reativar" : "revogar"}">
                 <button class="${l.revogada ? "" : "perigo"} pequeno">${l.revogada ? "Reativar" : "Revogar"}</button></form>
               ${l.ultima_comunicacao
                 ? ""
@@ -174,8 +183,11 @@ export function paginaLicencas(linhas: { licenca: Licenca; cliente: Cliente | nu
       <h2>Nova licença de cortesia</h2>
       <p class="nota">Para a sua própria instalação e para os gestores do piloto. Não é cobrada.</p>
       <form method="post" action="/gestao/licencas">
+        <label>Nome do gestor <input name="nome"></label>
+        <label>Email do gestor (opcional) <input type="email" name="email"></label>
+        <label class="opcao"><input type="checkbox" name="enviar" value="1" checked> Enviar-lhe a chave por email</label>
         <label>Alojamentos incluídos <input type="number" name="alojamentos" min="1" max="1000" value="1" required></label>
-        <label>Notas (ex.: nome do gestor) <input name="notas"></label>
+        <label>Notas (só para si) <input name="notas"></label>
         <button type="submit">Criar</button>
       </form>
     </section>

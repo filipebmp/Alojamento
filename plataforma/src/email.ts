@@ -6,11 +6,21 @@ export interface ConfigEmail {
   url?: string; // só para testes locais
 }
 
-export async function enviarEmail(cfg: ConfigEmail, m: { para: string; assunto: string; texto: string; html: string }): Promise<void> {
+export async function enviarEmail(
+  cfg: ConfigEmail,
+  m: { para: string; assunto: string; texto: string; html: string; responderPara?: string | null },
+): Promise<void> {
   const res = await fetch(cfg.url ?? "https://api.resend.com/emails", {
     method: "POST",
     headers: { Authorization: `Bearer ${cfg.apiKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ from: cfg.remetente, to: [m.para], subject: m.assunto, text: m.texto, html: m.html }),
+    body: JSON.stringify({
+      from: cfg.remetente,
+      to: [m.para],
+      subject: m.assunto,
+      text: m.texto,
+      html: m.html,
+      ...(m.responderPara ? { reply_to: m.responderPara } : {}),
+    }),
   });
   if (!res.ok) throw new Error(`Resend ${res.status}: ${(await res.text()).slice(0, 300)}`);
 }
@@ -32,4 +42,23 @@ export function emailRecuperacao(link: string) {
 export async function hashEmail(email: string): Promise<string> {
   const d = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(email.trim().toLowerCase()));
   return [...new Uint8Array(d)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+// Licença de cortesia (piloto): a chave e os próximos passos. Respostas vão para o contacto do site.
+export function emailLicencaCortesia(d: { chave: string; nome: string | null; alojamentos: number }) {
+  const ola = d.nome ? `Olá ${d.nome},` : "Olá,";
+  const texto =
+    `${ola}\n\nOfereceram-lhe uma licença do bookgest para ${d.alojamentos} alojamento(s), sem custos.\n\n` +
+    `A sua chave de licença: ${d.chave}\n\n` +
+    "O bookgest fica instalado numa conta Cloudflare gratuita em seu nome: os dados dos seus hóspedes ficam só consigo. " +
+    "Vamos ajudá-lo a fazer a instalação; depois, cole a chave no painel, em Definições → Licença.\n\n" +
+    "Responda a este email se tiver alguma dúvida.";
+  const html = `<p>${escapar(ola)}</p>
+<p>Ofereceram-lhe uma licença do <strong>bookgest</strong> para ${d.alojamentos} alojamento(s), sem custos.</p>
+<p>A sua chave de licença:</p>
+<p style="font:600 20px ui-monospace,monospace;letter-spacing:.05em;padding:12px;border:2px dashed #0f5c4d;border-radius:8px;text-align:center">${escapar(d.chave)}</p>
+<p>O bookgest fica instalado numa conta Cloudflare gratuita em seu nome: os dados dos seus hóspedes ficam só consigo.
+Vamos ajudá-lo a fazer a instalação; depois, cole a chave no painel, em <em>Definições → Licença</em>.</p>
+<p style="color:#5d6964">Responda a este email se tiver alguma dúvida.</p>`;
+  return { assunto: "A sua licença do bookgest", texto, html };
 }
