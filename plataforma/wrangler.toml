@@ -27,7 +27,7 @@ crons = ["23 * * * *"]
 # Endereço público da plataforma (usado nos regressos do Stripe). Vazio = o endereço do pedido.
 URL_PUBLICO = "https://bookgest.pt"
 # Email de contacto mostrado no site
-CONTACTO = ""
+CONTACTO = "geral@bookgest.pt"
 # "sim" para aceitar registos com 30 dias grátis, alojados na conta do fornecedor (exige Resend e CF_API_TOKEN)
 REGISTOS_ABERTOS = "nao"
 # Subdomínio workers.dev da conta do fornecedor (endereços das instalações alojadas: bk-<nome>.<subdomínio>.workers.dev)

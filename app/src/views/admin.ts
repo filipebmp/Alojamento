@@ -635,7 +635,7 @@ document.querySelector("select[data-concelhos]")?.addEventListener("change", (e)
 
 export function paginaAlojamento(
   a: Alojamento | null,
-  opcoes: { primeiro?: boolean; erro?: string; guardado?: boolean; codigoSugerido?: string; calendarios?: Calendario[] } = {},
+  opcoes: { primeiro?: boolean; erro?: string; guardado?: boolean; codigoSugerido?: string; calendarios?: Calendario[]; reservas?: number } = {},
 ) {
   const v = (x: string | number | null | undefined) => x ?? "";
   const titulo = a ? a.nome : opcoes.primeiro ? "O seu primeiro alojamento" : "Novo alojamento";
@@ -686,7 +686,13 @@ export function paginaAlojamento(
     ${a
       ? html`<form method="post" action="/admin/alojamentos/${a.id}/${a.ativo ? "arquivar" : "reativar"}"
           ${a.ativo ? html`onsubmit="return confirm('Arquivar este alojamento? Deixa de aparecer nas novas reservas; os dados são conservados.')"` : ""}>
-          <button class="${a.ativo ? "perigo" : ""}">${a.ativo ? "Arquivar alojamento" : "Reativar alojamento"}</button></form>`
+          <button class="${a.ativo ? "perigo" : ""}">${a.ativo ? "Arquivar alojamento" : "Reativar alojamento"}</button></form>
+        ${opcoes.reservas === 0
+          ? html`<form method="post" action="/admin/alojamentos/${a.id}/apagar"
+              onsubmit="return confirm('Apagar este alojamento de vez? Não tem reservas; as instruções de chegada e os calendários ligados também são apagados.')">
+              <button class="perigo">Apagar alojamento</button></form>
+            <p class="nota">Pode apagar porque não tem reservas. Um alojamento com reservas só pode ser arquivado.</p>`
+          : ""}`
       : ""}
     ${a ? seccaoCalendarios(a, opcoes.calendarios ?? []) : ""}
     ${SCRIPT_CONCELHO}`, { admin: true, seccao: "alojamentos" });

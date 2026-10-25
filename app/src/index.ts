@@ -611,7 +611,41 @@ app.post("/admin/alojamentos", async (c) => {
 app.get("/admin/alojamentos/:id", async (c) => {
   const a = await obterAlojamento(c.env.DB, Number(c.req.param("id")));
   if (!a) return c.notFound();
-  return c.html(paginaAlojamento(a, { guardado: c.req.query("guardado") === "1", calendarios: await listarCalendarios(c.env.DB, a.id) }));
+  return c.html(paginaAlojamento(a, {
+    guardado: c.req.query("guardado") === "1",
+    calendarios: await listarCalendarios(c.env.DB, a.id),
+    reservas: await contarReservasAlojamento(c.env.DB, a.id),
+  }));
+});
+
+// Reservas a sério (as datas marcadas como "não é uma reserva" não contam).
+async function contarReservasAlojamento(db: D1Database, id: number): Promise<number> {
+  return (await db.prepare("SELECT COUNT(*) AS n FROM reservas WHERE alojamento_id = ? AND ignorada = 0").bind(id).first<number>("n")) ?? 0;
+}
+
+// Só um alojamento sem reservas pode ser apagado (ex.: criado por engano ou para testar); os outros arquivam-se.
+app.post("/admin/alojamentos/:id/apagar", async (c) => {
+  const id = Number(c.req.param("id"));
+  const a = await obterAlojamento(c.env.DB, id);
+  if (!a) return c.notFound();
+  if (await contarReservasAlojamento(c.env.DB, id)) {
+    return c.html(paginaAlojamento(a, {
+      erro: "Este alojamento tem reservas: não pode ser apagado. Pode arquivá-lo.",
+      calendarios: await listarCalendarios(c.env.DB, id),
+      reservas: await contarReservasAlojamento(c.env.DB, id),
+    }), 400);
+  }
+  await c.env.DB.batch([
+    c.env.DB.prepare("UPDATE emails_recebidos SET reserva_id = NULL WHERE reserva_id IN (SELECT id FROM reservas WHERE alojamento_id = ?)").bind(id),
+    c.env.DB.prepare("DELETE FROM hospedes WHERE reserva_id IN (SELECT id FROM reservas WHERE alojamento_id = ?)").bind(id),
+    c.env.DB.prepare("DELETE FROM faturacao WHERE reserva_id IN (SELECT id FROM reservas WHERE alojamento_id = ?)").bind(id),
+    c.env.DB.prepare("DELETE FROM reservas WHERE alojamento_id = ?").bind(id),
+    c.env.DB.prepare("DELETE FROM calendarios WHERE alojamento_id = ?").bind(id),
+    c.env.DB.prepare("DELETE FROM passos WHERE alojamento_id = ?").bind(id),
+    c.env.DB.prepare("DELETE FROM declaracoes_tmt_alojamento WHERE alojamento_id = ?").bind(id),
+    c.env.DB.prepare("DELETE FROM alojamentos WHERE id = ?").bind(id),
+  ]);
+  return c.redirect("/admin/alojamentos");
 });
 
 // ---------- Calendários (importação de reservas) ----------
