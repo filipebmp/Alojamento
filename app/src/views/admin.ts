@@ -11,10 +11,15 @@ import { type Calendario, NOMES_PLATAFORMA } from "../lib/importacao";
 import type { EmailRecebido } from "../lib/emails";
 import type { DadosEmailReserva } from "../../../comum/emails";
 import { N_CODIGOS, type Papel, type Utilizador } from "../lib/utilizadores";
-import { dataPt, pagina } from "./layout";
+import { dataCurta, dataPt, icone, nomeMes, pagina } from "./layout";
+import { chipOrigem, classePrazo } from "./painel";
+import { diferencaDias } from "../lib/datas";
 
 export function paginaLogin(opcoes: { erro?: string; legado?: boolean; email?: string } = {}) {
-  return pagina("Entrar", html`<h1>Entrar</h1>
+  return pagina("Entrar", html`<div class="entrada">
+    <div class="marca"><span class="logo">${icone("hoje", 16)}</span>bookgest</div>
+    <section class="cartao">
+    <h1>Entrar</h1>
     ${opcoes.legado
       ? html`<p class="aviso">A entrada passa a ser com email. Indique o seu email e a palavra-passe de sempre:
           o email fica associado à sua conta de gestor.</p>`
@@ -23,47 +28,10 @@ export function paginaLogin(opcoes: { erro?: string; legado?: boolean; email?: s
     <form method="post" action="/login">
       <label>Email <input type="email" name="email" required autofocus autocomplete="username" value="${opcoes.email ?? ""}"></label>
       <label>Palavra-passe <input type="password" name="password" required autocomplete="current-password"></label>
-      <button type="submit">Entrar</button>
+      <button type="submit" class="grande">Entrar</button>
     </form>
-    ${opcoes.legado ? "" : html`<p class="nota"><a href="/recuperar">Esqueci-me da palavra-passe</a></p>`}`);
-}
-
-function classePrazo(prazo: string | null, hoje: string): string {
-  if (!prazo) return "info";
-  if (prazo < hoje) return "atrasado";
-  if (prazo === hoje) return "hoje";
-  return "";
-}
-
-export function paginaPainel(
-  pendentes: Pendente[],
-  reservas: ReservaCompleta[],
-  alojamentos: Map<number, Alojamento>,
-  agora: Date,
-  avisoLicenca: string | null,
-  papel: Papel,
-) {
-  const hoje = hojeLisboa(agora);
-  const proximas = reservas.filter((rc) => !rc.reserva.cancelada && rc.reserva.checkout >= hoje).reverse();
-  const passadas = reservas.filter((rc) => rc.reserva.cancelada || rc.reserva.checkout < hoje).slice(0, 20);
-  // Com mais de um alojamento, cada linha indica a que alojamento pertence.
-  const etiqueta = (id: number | undefined) =>
-    alojamentos.size > 1 && id != null ? html`<span class="etiqueta">${alojamentos.get(id)?.nome ?? ""}</span>` : "";
-  const linhaReserva = ({ reserva: r }: ReservaCompleta) => html`<li><a href="/admin/reservas/${r.id}">
-      ${etiqueta(r.alojamento_id)}<strong>${r.nome_titular}</strong> ${dataPt(r.checkin)} → ${dataPt(r.checkout)}${r.cancelada ? " (cancelada)" : ""}</a></li>`;
-
-  return pagina("Painel", html`
-    ${avisoLicenca ? html`<p class="aviso"><a href="/admin/definicoes">${avisoLicenca}</a></p>` : ""}
-    <h1>Pendentes</h1>
-    ${pendentes.length
-      ? html`<ul class="pendentes">${pendentes.map((p) => html`<li class="${classePrazo(p.prazo, hoje)}">
-          <a href="${p.link ?? (p.reservaId ? `/admin/reservas/${p.reservaId}` : "/admin/tmt")}">${etiqueta(p.alojamentoId)}${p.descricao}</a>
-          ${p.prazo ? html`<span class="prazo">até ${dataPt(p.prazo)}</span>` : ""}</li>`)}</ul>`
-      : html`<p>✅ Nada pendente.</p>`}
-    <h2>Próximas reservas</h2>
-    ${proximas.length ? html`<ul class="lista">${proximas.map(linhaReserva)}</ul>` : html`<p>Sem reservas.</p>`}
-    ${passadas.length ? html`<h2>Anteriores</h2><ul class="lista">${passadas.map(linhaReserva)}</ul>` : ""}
-  `, { admin: papel === "gestor" ? true : "equipa" });
+    ${opcoes.legado ? "" : html`<p class="nota"><a href="/recuperar">Esqueci-me da palavra-passe</a></p>`}
+    </section></div>`);
 }
 
 export function paginaNovaReserva(
@@ -89,7 +57,7 @@ export function paginaNovaReserva(
           <label>Comissão Booking (€) <input name="comissao" inputmode="decimal" placeholder="0,00"></label>`
         : ""}
       <button type="submit">Criar</button>
-    </form>`, { admin: papel === "gestor" ? true : "equipa" });
+    </form>`, { admin: papel === "gestor" ? true : "equipa", seccao: "reservas" });
 }
 
 const NOMES_DOC: Record<string, string> = { P: "Passaporte", B: "Bilhete de identidade", O: "Outro" };
@@ -112,15 +80,84 @@ export function paginaReserva(
     `Olá ${r.nome_titular}! Para o check-in, por favor preencha este formulário. O código das chaves aparece depois de preenchido.\n` +
     `Hi ${r.nome_titular}! For check-in, please fill in this form. The key code will appear once completed.\n${linkHospede}`;
 
-  return pagina(r.nome_titular, html`
-    <h1>${r.nome_titular}</h1>
-    <p>${gestor ? html`<a href="/admin/alojamentos/${alojamento.id}">${alojamento.nome}</a>` : alojamento.nome} · ${dataPt(r.checkin)} → ${dataPt(r.checkout)} · ${r.n_hospedes} hóspede(s)
-      ${r.ref_booking ? html` · ${r.origem === "airbnb" ? "Airbnb" : r.origem === "booking" || r.origem === "manual" ? "Booking" : "Ref."} ${r.ref_booking}` : ""}${r.cancelada ? html` · <strong>CANCELADA</strong>` : ""}</p>
+  const noites = diferencaDias(r.checkin, r.checkout);
+  const estado = r.cancelada
+    ? html`<span class="chip atrasado">Cancelada</span>`
+    : r.checkin === hoje ? html`<span class="chip hoje">Chega hoje</span>`
+    : r.checkout === hoje ? html`<span class="chip hoje">Sai hoje</span>`
+    : r.checkin < hoje && r.checkout > hoje ? html`<span class="chip ok">Em casa</span>`
+    : r.checkout < hoje ? html`<span class="chip">Terminada</span>`
+    : html`<span class="chip">${diferencaDias(hoje, r.checkin) === 1 ? "Chega amanhã" : `Chega daqui a ${diferencaDias(hoje, r.checkin)} dias`}</span>`;
 
-    ${pendentes.length && gestor
-      ? html`<ul class="pendentes">${pendentes.map((p) => html`<li class="${classePrazo(p.prazo, hoje)}">${p.descricao}
-          ${p.prazo ? html`<span class="prazo">até ${dataPt(p.prazo)}</span>` : ""}</li>`)}</ul>`
-      : ""}
+  // Percurso da reserva: cada passo feito, por fazer (com prazo) ou ainda não aplicável.
+  const pendente = (tipo: Pendente["tipo"]) => pendentes.find((p) => p.tipo === tipo);
+  const passo = (o: { titulo: string; sub: string; feito?: boolean; p?: Pendente; ancora: string; acao?: string }) => {
+    const c = o.feito ? "feito" : o.p ? (classePrazo(o.p.prazo, hoje) === "atrasado" ? "atrasado" : "atencao") : "";
+    return html`<li class="${c}"><span class="marca-passo">${o.feito ? icone("visto", 14) : ""}</span>
+      <span class="texto"><strong>${o.titulo}</strong><span>${o.sub}${o.p?.prazo ? ` · até ${dataPt(o.p.prazo)}` : ""}</span></span>
+      ${o.acao ? html`<a href="#${o.ancora}">${o.acao}</a>` : ""}</li>`;
+  };
+  const completos = hospedes.filter(hospedeCompleto).length;
+  const hospedesFeitos = completos >= r.n_hospedes && hospedes.length >= r.n_hospedes;
+  const progresso = r.cancelada ? [] : [
+    ...(r.incompleta ? [passo({ titulo: "Dados da reserva", sub: "Completar nome e n.º de hóspedes", p: pendente("completar"), ancora: "dados", acao: "Completar" })] : []),
+    passo({
+      titulo: "Dados dos hóspedes",
+      sub: hospedes.length ? `${completos} de ${r.n_hospedes} completos` : "Link de check-in por preencher",
+      feito: hospedesFeitos,
+      p: pendente("formulario") ?? pendente("dados_hospedes"),
+      ancora: hospedes.length ? "hospedes" : "link",
+      acao: hospedesFeitos || r.incompleta ? undefined : hospedes.length ? "Ver" : "Enviar link",
+    }),
+    ...(gestor
+      ? [
+          passo({
+            titulo: "Comunicação ao SIBA",
+            sub: estrangeiros.length
+              ? r.siba_submetido_em ? `Comunicado em ${dataPt(r.siba_submetido_em)}` : `${estrangeiros.length} hóspede(s) estrangeiro(s)`
+              : hospedesFeitos ? "Sem hóspedes estrangeiros" : "Depende dos hóspedes",
+            feito: !!r.siba_submetido_em || (hospedesFeitos && !estrangeiros.length),
+            p: pendente("siba"),
+            ancora: "siba",
+            acao: estrangeiros.length && !r.siba_submetido_em ? "Comunicar" : undefined,
+          }),
+          passo({
+            titulo: "Fatura-recibo",
+            sub: r.fatura_emitida_em ? `N.º ${r.fatura_numero} · ${dataPt(r.fatura_emitida_em)}` : f ? "Dados de faturação recebidos" : "À espera dos dados de faturação",
+            feito: !!r.fatura_emitida_em,
+            p: pendente("fatura"),
+            ancora: "fatura",
+            acao: r.fatura_emitida_em ? undefined : "Registar",
+          }),
+          ...(cobraTmt(regras)
+            ? [passo({
+                titulo: "Taxa turística",
+                sub: pendente("tmt_divergente") ? "Valor cobrado diferente do devido" : `${euros(tmt.valorCents)} · declaração de ${nomeMes(r.checkin)}`,
+                p: pendente("tmt_divergente"),
+                ancora: "tmt",
+                acao: pendente("tmt_divergente") ? "Ver" : undefined,
+              })]
+            : []),
+        ]
+      : []),
+  ];
+
+  return pagina(r.nome_titular, html`
+    <a class="voltar" href="/admin/reservas">${icone("voltar", 18)}Reservas</a>
+    <p class="sobre nota" style="margin: 0">${gestor ? html`<a href="/admin/alojamentos/${alojamento.id}">${alojamento.nome}</a>` : alojamento.nome}${r.ref_booking ? ` · ${r.ref_booking}` : ""}</p>
+    <h1>${r.incompleta ? "Reserva por completar" : r.nome_titular}</h1>
+    <div class="botoes">${chipOrigem(r)}${estado}</div>
+
+    <section class="cartao factos">
+      <div><span>Check-in</span><strong>${dataCurta(r.checkin)}</strong><small>a partir das ${alojamento.hora_checkin}</small></div>
+      <div><span>Check-out</span><strong>${dataCurta(r.checkout)}</strong></div>
+      <div><span>Estadia</span><strong>${noites} ${noites === 1 ? "noite" : "noites"}</strong><small>${r.n_hospedes} hóspede(s)</small></div>
+      ${gestor && alojamento.codigo_cofre
+        ? html`<div><span>Código das chaves</span><strong style="letter-spacing: .12em">${alojamento.codigo_cofre}</strong></div>`
+        : ""}
+    </section>
+
+    ${progresso.length ? html`<section class="cartao"><h2>Progresso</h2><ul class="progresso">${progresso}</ul></section>` : ""}
 
     ${r.desaparecida_em && !r.cancelada
       ? html`<section class="cartao aviso">
@@ -135,7 +172,7 @@ export function paginaReserva(
       : ""}
 
     ${r.incompleta || r.origem !== "manual"
-      ? html`<section class="cartao ${r.incompleta ? "aviso" : ""}">
+      ? html`<section class="cartao ${r.incompleta ? "aviso" : ""}" id="dados">
           <h2>Dados da reserva</h2>
           ${r.incompleta
             ? html`<p>Importada do calendário ${NOMES_PLATAFORMA[r.origem as keyof typeof NOMES_PLATAFORMA] ?? ""}: o calendário só traz as datas.
@@ -155,17 +192,20 @@ export function paginaReserva(
         </section>`
       : ""}
 
-    <section class="cartao">
+    ${r.cancelada || r.incompleta
+      ? ""
+      : html`<section class="cartao" id="link">
       <h2>Link de check-in</h2>
-      <input readonly value="${linkHospede}" onclick="this.select()">
+      <p class="nota">O hóspede preenche os dados e recebe o código das chaves.</p>
       <div class="botoes">
-        <a class="botao" href="https://wa.me/?text=${encodeURIComponent(mensagem)}">WhatsApp</a>
-        <button type="button" data-texto="${mensagem}"
-          onclick="navigator.share ? navigator.share({ text: this.dataset.texto }) : navigator.clipboard.writeText(this.dataset.texto)">Partilhar</button>
+        <a class="botao" href="https://wa.me/?text=${encodeURIComponent(mensagem)}">${icone("whatsapp", 18)}Enviar por WhatsApp</a>
+        <button type="button" class="secundario" data-texto="${mensagem}"
+          onclick="navigator.share ? navigator.share({ text: this.dataset.texto }) : navigator.clipboard.writeText(this.dataset.texto).then(() => this.textContent = 'Copiado')">${icone("copiar", 18)}Partilhar</button>
       </div>
-    </section>
+      <input readonly value="${linkHospede}" onclick="this.select()" aria-label="Link de check-in" style="margin-top: 12px">
+    </section>`}
 
-    <section class="cartao">
+    <section class="cartao" id="hospedes">
       <h2>Hóspedes (${hospedes.length}/${r.n_hospedes})</h2>
       ${hospedes.length && !gestor
         ? html`<ul class="lista">${hospedes.map((h) => html`<li>${h.nome}${h.titular ? " ★" : ""} ${hospedeCompleto(h) ? "✅" : "⏳"}</li>`)}</ul>`
@@ -179,7 +219,7 @@ export function paginaReserva(
     </section>
 
     ${gestor ? html`
-    <section class="cartao">
+    <section class="cartao" id="siba">
       <h2>SIBA</h2>
       ${estrangeiros.length
         ? html`<p>${estrangeiros.length} hóspede(s) estrangeiro(s) a comunicar em
@@ -191,7 +231,7 @@ export function paginaReserva(
         : html`<p>Sem hóspedes estrangeiros registados.</p>`}
     </section>
 
-    <section class="cartao">
+    <section class="cartao" id="fatura">
       <h2>Fatura-recibo</h2>
       ${f
         ? html`<dl><dt>Cliente</dt><dd>${f.nome}</dd><dt>NIF / ID</dt><dd>${f.nif} (${f.pais})</dd>
@@ -207,7 +247,7 @@ export function paginaReserva(
     </section>
 
     ${cobraTmt(regras)
-      ? html`<section class="cartao">
+      ? html`<section class="cartao" id="tmt">
       <h2>Taxa turística</h2>
       <p>Devida: <strong>${euros(tmt.valorCents)}</strong> (${tmt.hospedesTributaveis} hóspede(s) × ${tmt.noites} noite(s) × ${euros(regras.valorPorNoiteCents)})<br>
         Dormidas: ${tmt.dormidasTotais} totais · ${tmt.dormidasTributaveis} tributáveis ·
@@ -217,7 +257,7 @@ export function paginaReserva(
     </section>`
       : ""}
 
-    <section class="cartao">
+    <section class="cartao" id="valores">
       <h2>Valores</h2>
       <form method="post" action="/admin/reservas/${r.id}/valores">
         <label>Valor total pago pelo hóspede (€, sem taxa turística)
@@ -233,7 +273,7 @@ export function paginaReserva(
             <button class="perigo">Cancelar reserva</button></form>`}
     </section>
     ` : ""}
-  `, { admin: gestor ? true : "equipa" });
+  `, { admin: gestor ? true : "equipa", seccao: "reservas" });
 }
 
 export interface ResumoMesTmt {
@@ -285,7 +325,7 @@ export function paginaTmt(porAlojamento: TmtAlojamento[], mostrarNome: boolean) 
           </div>
         </section>`;
       })}`;
-    })}`, { admin: true });
+    })}`, { admin: true, seccao: "tmt" });
 }
 
 // Reduz as fotos no telemóvel antes do envio (máx. 1600 px, JPEG) para caberem na base de dados.
@@ -347,7 +387,7 @@ export function paginaInstrucoes(a: Alojamento, passos: Passo[], erro?: string) 
         <button type="submit">Adicionar</button>
       </form>
     </section>
-    ${SCRIPT_REDIMENSIONAR}`, { admin: true });
+    ${SCRIPT_REDIMENSIONAR}`, { admin: true, seccao: "alojamentos" });
 }
 
 function centsParaInput(cents: number): string {
@@ -384,7 +424,7 @@ export function paginaCodigos(codigos: string[], opcoes: { primeiraVez: boolean 
     <div class="botoes">
       <button type="button" data-texto="${codigos.join("\n")}" onclick="navigator.clipboard.writeText(this.dataset.texto).then(() => this.textContent = 'Copiados ✓')">Copiar</button>
       <a class="botao" href="${opcoes.primeiraVez ? "/admin" : "/admin/conta"}">Já os guardei</a>
-    </div>`, { admin: opcoes.primeiraVez ? undefined : true });
+    </div>`, { admin: opcoes.primeiraVez ? undefined : true, seccao: "conta" });
 }
 
 export function paginaRecuperar(opcoes: { enviado?: boolean; erroEmail?: string; erroCodigo?: string } = {}) {
@@ -469,7 +509,7 @@ export function paginaConta(u: Utilizador, codigos: number | null, opcoes: { err
           </form>
         </section>`
       : ""}
-    <form method="post" action="/logout"><button>Terminar sessão</button></form>`, { admin: u.papel === "gestor" ? true : "equipa" });
+    <form method="post" action="/logout"><button class="secundario">Terminar sessão</button></form>`, { admin: u.papel === "gestor" ? true : "equipa", seccao: "conta" });
 }
 
 export function paginaUtilizadores(lista: Utilizador[], meuId: number, opcoes: { erro?: string; ok?: string }) {
@@ -505,7 +545,7 @@ export function paginaUtilizadores(lista: Utilizador[], meuId: number, opcoes: {
         <p class="nota">Dê-lhe esta palavra-passe; depois pode mudá-la em "Conta".</p>
         <button type="submit">Criar</button>
       </form>
-    </section>`, { admin: true });
+    </section>`, { admin: true, seccao: "conta" });
 }
 
 const NOMES_ESTADO_LICENCA = { ativa: "ativa", pagamento_em_atraso: "pagamento em atraso", inativa: "inativa", desconhecida: "não reconhecida" };
@@ -515,7 +555,7 @@ export function paginaReservasBloqueadas(papel: Papel) {
     <p>A licença do bookgest está inativa (ou há mais alojamentos ativos do que os incluídos) há mais de 14 dias.
       As reservas existentes, os links de check-in já enviados e todos os dados continuam disponíveis.</p>
     ${papel === "gestor" ? html`<p><a class="botao" href="/admin/definicoes">Ver a licença</a></p>` : html`<p>Fale com o gestor.</p>`}`,
-  { admin: papel === "gestor" ? true : "equipa" });
+  { admin: papel === "gestor" ? true : "equipa", seccao: "reservas" });
 }
 
 export function paginaDefinicoes(opcoes: {
@@ -558,7 +598,7 @@ export function paginaDefinicoes(opcoes: {
             : `Atualizada para a ${v.ultima.versao} em ${dataPt(v.ultima.em)}.`}</p>`
         : ""}
       ${v.automatica ? html`<form method="post" action="/admin/definicoes/atualizar"><button>Procurar atualizações agora</button></form>` : ""}
-    </section>`, { admin: true });
+    </section>`, { admin: true, seccao: "definicoes" });
 }
 
 // ---------- Alojamentos ----------
@@ -569,7 +609,7 @@ export function paginaAlojamentos(alojamentos: Alojamento[]) {
       <span class="prazo">${[a.concelho, a.registo_al ? `AL ${a.registo_al}` : ""].filter(Boolean).join(" · ") || "—"}</span></a></li>`;
   return pagina("Alojamentos", html`<h1>Alojamentos</h1>
     <ul class="lista">${alojamentos.map(linha)}</ul>
-    <a class="botao" href="/admin/alojamentos/novo">+ Novo alojamento</a>`, { admin: true });
+    <a class="botao" href="/admin/alojamentos/novo">+ Novo alojamento</a>`, { admin: true, seccao: "alojamentos" });
 }
 
 // Preenche os campos da taxa turística a partir do concelho escolhido.
@@ -649,7 +689,7 @@ export function paginaAlojamento(
           <button class="${a.ativo ? "perigo" : ""}">${a.ativo ? "Arquivar alojamento" : "Reativar alojamento"}</button></form>`
       : ""}
     ${a ? seccaoCalendarios(a, opcoes.calendarios ?? []) : ""}
-    ${SCRIPT_CONCELHO}`, { admin: true });
+    ${SCRIPT_CONCELHO}`, { admin: true, seccao: "alojamentos" });
 }
 
 // ---------- Calendários (importação de reservas) ----------
@@ -731,5 +771,5 @@ export function paginaEmails(o: { endereco: string | null; privado: boolean; ema
     ${o.verificado ? html`<p>✅ Verificado.</p>` : ""}
     <form method="post" action="/admin/emails/verificar"><button>Verificar emails agora</button></form>
     <h2>Recebidos</h2>
-    ${o.emails.length ? o.emails.map(linha) : html`<p>Ainda não chegou nenhum email.</p>`}`, { admin: true });
+    ${o.emails.length ? o.emails.map(linha) : html`<p>Ainda não chegou nenhum email.</p>`}`, { admin: true, seccao: "emails" });
 }

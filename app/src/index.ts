@@ -17,7 +17,7 @@ import {
   prepararInstalacao,
 } from "./db";
 import { configAlojamento, regrasTmt } from "./lib/concelhos";
-import { hojeLisboa } from "./lib/datas";
+import { hojeLisboa, somarDias } from "./lib/datas";
 import { compararVersoes } from "../../comum/versoes";
 import { atualizar } from "./lib/atualizacao";
 import type { Plataforma } from "./lib/ical";
@@ -36,7 +36,7 @@ import {
 import { estadoCodigo, mesesAteAnterior, ordenarPendentes, pendentesReserva, pendentesTmt } from "./lib/regras";
 import { SENHA_MINIMA, iguais, verificarSenha } from "../../comum/senha";
 import { calcularTmt, cobraTmt } from "./lib/tmt";
-import type { Alojamento } from "./lib/tipos";
+import type { Alojamento, Reserva } from "./lib/tipos";
 import {
   type Papel,
   type Utilizador,
@@ -69,7 +69,6 @@ import {
   paginaLogin,
   paginaNovaReserva,
   paginaNovaSenhaEmail,
-  paginaPainel,
   paginaRecuperar,
   paginaReserva,
   paginaReservasBloqueadas,
@@ -78,6 +77,8 @@ import {
   paginaUtilizadores,
 } from "./views/admin";
 import { paginaHospede } from "./views/hospede";
+import { type VistaReservas, paginaCalendario, paginaHoje, paginaMais, paginaReservas } from "./views/painel";
+import { barrasCalendario, numerosHoje } from "./lib/painel";
 import { ESTATICOS } from "./estaticos.gerado";
 import { VERSAO } from "./versao";
 
@@ -326,7 +327,7 @@ for (const caminho of [
   "/admin/alojamentos", "/admin/alojamentos/*", "/admin/instrucoes", "/admin/tmt", "/admin/tmt/*",
   "/admin/definicoes", "/admin/definicoes/*", "/admin/utilizadores", "/admin/utilizadores/*",
   "/admin/reservas/:id/valores", "/admin/reservas/:id/siba", "/admin/reservas/:id/fatura", "/admin/reservas/:id/cancelar",
-  "/admin/reservas/:id/ignorar", "/admin/reservas/:id/manter", "/admin/emails", "/admin/emails/*",
+  "/admin/reservas/:id/ignorar", "/admin/reservas/:id/manter", "/admin/emails", "/admin/emails/*", "/admin/mais",
 ]) {
   app.use(caminho, soGestor);
 }
@@ -376,8 +377,62 @@ app.get("/admin", async (c) => {
   const aviso = avisoBase && licenca.problemaDesde
     ? `${avisoBase} ${reservasBloqueadas(licenca.problemaDesde, agora) ? "Já não é possível criar reservas novas." : `A partir de ${dataBloqueio(licenca.problemaDesde).toLocaleDateString("pt-PT", { timeZone: "Europe/Lisbon" })} deixa de ser possível criar reservas novas.`}`
     : avisoBase;
-  return c.html(paginaPainel(ordenarPendentes(pendentes), reservas, mapa, agora, aviso, p));
+  // Filtro por alojamento (só com mais de um alojamento ativo).
+  const ativos = alojamentos.filter((a) => a.ativo);
+  const filtro = filtroAlojamento(c, ativos);
+  const doFiltro = <T extends { alojamento_id?: number; alojamentoId?: number }>(x: T) =>
+    filtro == null || (x.alojamento_id ?? x.alojamentoId) == null || (x.alojamento_id ?? x.alojamentoId) === filtro;
+  const reservasFiltradas = reservas.filter((rc) => doFiltro(rc.reserva));
+  const hoje = hojeLisboa(agora);
+  return c.html(paginaHoje({
+    hoje,
+    pendentes: ordenarPendentes(pendentes.filter(doFiltro)),
+    reservas: reservasFiltradas,
+    alojamentos: ativos,
+    filtro,
+    numeros: numerosHoje(reservasFiltradas.map((rc) => rc.reserva), filtro == null ? ativos.length : 1, hoje),
+    aviso,
+    papel: p,
+  }));
 });
+
+function filtroAlojamento(c: Ctx, ativos: Alojamento[]): number | null {
+  const id = Number(c.req.query("alojamento"));
+  return ativos.length > 1 && ativos.some((a) => a.id === id) ? id : null;
+}
+
+app.get("/admin/calendario", async (c) => {
+  const hoje = hojeLisboa(new Date());
+  const pedido = c.req.query("inicio") ?? "";
+  // Por omissão começa dois dias antes de hoje, para se verem também as saídas recentes.
+  const inicio = /^\d{4}-\d{2}-\d{2}$/.test(pedido) && !Number.isNaN(Date.parse(pedido)) ? pedido : somarDias(hoje, -2);
+  const dias = c.req.query("dias") === "28" ? 28 : 14;
+  const [reservas, alojamentos] = await Promise.all([listarReservas(c.env.DB), listarAlojamentos(c.env.DB)]);
+  const linhas = alojamentos.filter((a) => a.ativo).map((alojamento) => ({
+    alojamento,
+    barras: barrasCalendario(reservas.map((rc) => rc.reserva).filter((r) => r.alojamento_id === alojamento.id), inicio, dias),
+  }));
+  return c.html(paginaCalendario({ inicio, dias, hoje, linhas, papel: papel(c) }));
+});
+
+app.get("/admin/reservas", async (c) => {
+  const [reservas, alojamentos] = await Promise.all([
+    c.env.DB.prepare("SELECT * FROM reservas WHERE ignorada = 0 ORDER BY checkin DESC").all<Reserva>(),
+    listarAlojamentos(c.env.DB),
+  ]);
+  const vista = c.req.query("vista");
+  return c.html(paginaReservas({
+    hoje: hojeLisboa(new Date()),
+    reservas: reservas.results,
+    alojamentos: alojamentos.filter((a) => a.ativo),
+    filtro: filtroAlojamento(c, alojamentos.filter((a) => a.ativo)),
+    vista: (["anteriores", "canceladas"].includes(vista ?? "") ? vista : "proximas") as VistaReservas,
+    pesquisa: (c.req.query("q") ?? "").slice(0, 100),
+    papel: papel(c),
+  }));
+});
+
+app.get("/admin/mais", (c) => c.html(paginaMais()));
 
 app.get("/admin/reservas/nova", async (c) => {
   const bloqueio = await bloqueioReservas(c);
