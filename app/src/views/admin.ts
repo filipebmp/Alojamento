@@ -623,6 +623,8 @@ export function paginaDefinicoes(opcoes: {
       ${aviso ? html`<p class="erro">${aviso}</p>` : ""}
       ${opcoes.licenca.linkAssinar && estado && (estado.fimTeste || estado.estado === "inativa")
         ? html`<p><a class="botao" href="${opcoes.licenca.linkAssinar}" target="_blank" rel="noopener">Subscrever</a></p>`
+        : opcoes.licenca.linkAssinar && estado
+        ? html`<p><a class="botao secundario" href="${opcoes.licenca.linkAssinar}" target="_blank" rel="noopener">Alterar o n.º de alojamentos</a></p>`
         : ""}
       <form method="post" action="/admin/definicoes/licenca">
         <label>Chave de licença <input name="chave" required value="${chave ?? ""}" placeholder="BG-XXXX-XXXX-XXXX-XXXX" autocapitalize="characters"></label>

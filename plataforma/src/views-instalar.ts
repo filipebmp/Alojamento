@@ -108,12 +108,33 @@ export function paginaCriar(chave: string, opcoes: { erro?: string; slug?: strin
     <p class="nota">Ou <a href="/instalar?chave=${encodeURIComponent(chave)}">instalar numa conta Cloudflare sua</a>.</p>`, { estreito: true });
 }
 
-export function paginaAssinar(chave: string, opcoes: { precoCents: number | null; alojamentos: number; erro?: string; ativa?: boolean }) {
+export function paginaAssinar(
+  chave: string,
+  opcoes: {
+    precoCents: number | null;
+    alojamentos: number;
+    erro?: string;
+    ativa?: boolean;
+    cortesia?: boolean;
+    alojamentosPagos?: number;
+    portal?: string | null;
+    contacto?: string | null;
+  },
+) {
   const preco = opcoes.precoCents != null ? (opcoes.precoCents / 100).toLocaleString("pt-PT", { style: "currency", currency: "EUR" }) : null;
   return pagina("Subscrever", html`<h1>Continuar a usar o bookgest</h1>
     ${opcoes.erro ? html`<p class="erro">${opcoes.erro}</p>` : ""}
-    ${opcoes.ativa
-      ? html`<p>✅ Esta licença já tem uma assinatura ativa.</p>`
+    ${opcoes.cortesia
+      ? html`<p>Esta licença de cortesia inclui <strong>${opcoes.alojamentosPagos}</strong> alojamento(s).</p>
+        <p>Para incluir mais alojamentos, fale connosco${opcoes.contacto ? html`: <a href="mailto:${opcoes.contacto}?subject=${encodeURIComponent(`Alojamentos da licença ${chave}`)}">${opcoes.contacto}</a>` : ""}.</p>`
+      : opcoes.ativa
+      ? html`<p>✅ A sua assinatura está ativa e inclui <strong>${opcoes.alojamentosPagos}</strong> alojamento(s).</p>
+        ${opcoes.portal
+          ? html`<p><a class="botao" href="${opcoes.portal}">Alterar o n.º de alojamentos</a></p>
+            <p class="nota">Abre o portal de cliente do Stripe (entra com o email da assinatura). Em <em>Atualizar assinatura</em>
+              altere a quantidade. A sua instalação reconhece a alteração em poucos minutos: em Definições → Licença,
+              carregue em <em>Guardar e verificar</em> para ser imediato.</p>`
+          : opcoes.contacto ? html`<p>Para alterar o n.º de alojamentos, fale connosco: <a href="mailto:${opcoes.contacto}">${opcoes.contacto}</a>.</p>` : ""}`
       : html`${preco ? html`<p><strong>${preco}</strong> por alojamento, por mês (IVA incluído). Sem fidelização.</p>` : ""}
         <form method="post" action="/assinar" class="linha">
           <input type="hidden" name="chave" value="${chave}">

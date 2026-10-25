@@ -271,7 +271,11 @@ export function paginaLicencas(
           <td>${l.tipo}${l.modo ? html`<br><small>${l.modo}</small>` : ""}${l.valida_ate ? html`<br><small>até ${dataPt(l.valida_ate)}</small>` : ""}
             ${l.erro_atualizacao ? html`<br><small class="erro">atualização: ${l.erro_atualizacao}</small>` : ""}</td>
           <td class="${estado === "ativa" ? "" : "erro"}">${NOMES_ESTADO[estado]}</td>
-          <td>${l.alojamentos_pagos}</td>
+          <td>${l.tipo === "cortesia"
+            ? html`<form method="post" action="/gestao/licencas/${l.id}/alojamentos" class="linha">
+                <input type="number" name="alojamentos" min="1" max="1000" value="${l.alojamentos_pagos}" style="width: 4.5em; margin: 0" aria-label="Alojamentos incluídos">
+                <button class="pequeno">Alterar</button></form>`
+            : l.alojamentos_pagos}</td>
           <td class="${excede ? "erro" : ""}">${l.alojamentos_ativos ?? "—"}</td>
           <td>${l.versao ?? "—"}</td>
           <td>${dataPt(l.ultima_comunicacao)}</td>

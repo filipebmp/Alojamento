@@ -541,11 +541,19 @@ app.post("/criar", async (c) => {
 app.get("/assinar", async (c) => {
   const l = await obterLicencaPorChave(c.env.DB, String(c.req.query("chave") ?? "").trim().toUpperCase());
   if (!l) return c.html(paginaMensagem("Licença desconhecida", "Confirme o link."), 404);
-  if (!vendasAbertas(c.env)) return c.html(paginaMensagem("Em breve", "As subscrições ainda não estão abertas. Contacte-nos."), 403);
+  const ativa = l.tipo === "stripe" && estadoLicenca(l) === "ativa";
+  // Assinatura ativa ou cortesia: só se muda o n.º de alojamentos (no portal do Stripe, ou pedindo ao bookgest).
+  if (!ativa && l.tipo !== "cortesia" && !vendasAbertas(c.env)) {
+    return c.html(paginaMensagem("Em breve", "As subscrições ainda não estão abertas. Contacte-nos."), 403);
+  }
   return c.html(paginaAssinar(l.chave, {
     precoCents: await precoMensal(c.env),
     alojamentos: Math.max(1, l.alojamentos_ativos ?? 1),
-    ativa: l.tipo === "stripe" && estadoLicenca(l) === "ativa",
+    ativa,
+    cortesia: l.tipo === "cortesia" && !l.revogada,
+    alojamentosPagos: l.alojamentos_pagos,
+    portal: c.env.STRIPE_PORTAL || null,
+    contacto: c.env.CONTACTO || null,
   }));
 });
 
@@ -773,6 +781,16 @@ app.post("/gestao/licencas/:id/enviar", async (c) => {
 app.post("/gestao/licencas/:id/apagar", async (c) => {
   await c.env.DB.prepare("DELETE FROM licencas WHERE id = ? AND tipo = 'cortesia' AND ultima_comunicacao IS NULL")
     .bind(Number(c.req.param("id")))
+    .run();
+  return c.redirect("/gestao");
+});
+
+// N.º de alojamentos de uma licença de cortesia (as pagas mudam-se no Stripe).
+app.post("/gestao/licencas/:id/alojamentos", async (c) => {
+  const n = Number((await c.req.parseBody<Record<string, string>>()).alojamentos);
+  if (!Number.isInteger(n) || n < 1 || n > 1000) return c.text("Indique entre 1 e 1000 alojamentos.", 400);
+  await c.env.DB.prepare("UPDATE licencas SET alojamentos_pagos = ?, atualizado_em = ? WHERE id = ? AND tipo = 'cortesia'")
+    .bind(n, new Date().toISOString(), Number(c.req.param("id")))
     .run();
   return c.redirect("/gestao");
 });
