@@ -1,6 +1,6 @@
 {
-  "name": "Gestão de Alojamento Local",
-  "short_name": "Alojamento",
+  "name": "bookgest — Alojamento Local",
+  "short_name": "bookgest",
   "start_url": "/admin",
   "display": "standalone",
   "background_color": "#f6f7f5",

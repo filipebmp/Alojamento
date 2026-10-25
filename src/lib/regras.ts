@@ -1,13 +1,12 @@
 import { hojeLisboa, instanteLisboa, somarDias, somarDiasUteis } from "./datas";
-import { calcularTmt } from "./tmt";
-import type { Config, DeclaracaoTmt, Faturacao, Hospede, Reserva } from "./tipos";
+import { calcularTmt, cobraTmt } from "./tmt";
+import type { Config, DeclaracaoTmt, Faturacao, Hospede, RegrasTmt, Reserva } from "./tipos";
 
 const HORA = 3_600_000;
 
 // Prazos legais (confirmar nas fontes oficiais — ver docs/ESPECIFICACAO.md).
 export const DIAS_UTEIS_SIBA = 3;
 export const DIAS_UTEIS_FATURA = 5;
-export const DIA_DECLARACAO_TMT = 15;
 
 export function eEstrangeiro(h: Pick<Hospede, "nacionalidade">): boolean {
   return !!h.nacionalidade && h.nacionalidade !== "PT";
@@ -61,6 +60,7 @@ export interface Pendente {
   descricao: string;
   prazo: string | null; // YYYY-MM-DD
   reservaId?: number;
+  alojamentoId?: number;
   mes?: string;
 }
 
@@ -74,7 +74,7 @@ export function pendentesReserva(
   if (r.cancelada) return [];
   const hoje = hojeLisboa(agora);
   const p: Pendente[] = [];
-  const base = { reservaId: r.id };
+  const base = { reservaId: r.id, alojamentoId: r.alojamento_id };
 
   if (!titularCompleto(r, hospedes, fat) && hoje <= r.checkout) {
     p.push({ ...base, tipo: "formulario", descricao: `${r.nome_titular}: formulário de check-in por preencher`, prazo: r.checkin });
@@ -96,7 +96,7 @@ export function pendentesReserva(
   }
 
   if (r.tmt_cobrada_cents != null && hospedes.length >= r.n_hospedes) {
-    const devida = calcularTmt(r.checkin, r.checkout, hospedes).valorCents;
+    const devida = calcularTmt(r.checkin, r.checkout, hospedes, cfg.tmt).valorCents;
     if (devida !== r.tmt_cobrada_cents) {
       p.push({
         ...base,
@@ -130,27 +130,36 @@ export function ultimoDiaMes(mes: string): string {
   return somarDias(`${mesSeguinte(mes)}-01`, -1);
 }
 
-export function prazosTmt(mes: string) {
+// Prazos no mês seguinte; um dia que não existe nesse mês (ex.: 30 de fevereiro) passa para o último dia.
+export function prazosTmt(mes: string, regras: Pick<RegrasTmt, "diaDeclaracao" | "diaPagamento">) {
   const seguinte = mesSeguinte(mes);
-  const dia30 = `${seguinte}-30`;
   const ultimo = ultimoDiaMes(seguinte);
-  return {
-    declarar: `${seguinte}-${String(DIA_DECLARACAO_TMT).padStart(2, "0")}`,
-    pagar: dia30 < ultimo ? dia30 : ultimo,
+  const dia = (n: number) => {
+    const d = `${seguinte}-${String(n).padStart(2, "0")}`;
+    return d < ultimo ? d : ultimo;
   };
+  return { declarar: dia(regras.diaDeclaracao), pagar: dia(regras.diaPagamento) };
 }
 
-export function pendentesTmt(meses: string[], declaracoes: DeclaracaoTmt[]): Pendente[] {
-  const porMes = new Map(declaracoes.map((d) => [d.mes, d]));
+export interface AlojamentoTmt {
+  id: number;
+  concelho: string;
+  regras: RegrasTmt;
+}
+
+export function pendentesTmt(meses: string[], declaracoes: DeclaracaoTmt[], al: AlojamentoTmt): Pendente[] {
+  if (!cobraTmt(al.regras)) return [];
+  const porMes = new Map(declaracoes.filter((d) => d.alojamento_id === al.id).map((d) => [d.mes, d]));
   const p: Pendente[] = [];
   for (const mes of meses) {
     const d = porMes.get(mes);
-    const prazos = prazosTmt(mes);
+    const prazos = prazosTmt(mes, al.regras);
+    const base = { mes, alojamentoId: al.id };
     if (!d?.declarado_em) {
-      p.push({ tipo: "tmt_declarar", mes, descricao: `Taxa turística ${mes}: declarar no Balcão Virtual`, prazo: prazos.declarar });
+      p.push({ ...base, tipo: "tmt_declarar", descricao: `Taxa turística ${mes}: declarar à CM ${al.concelho}`, prazo: prazos.declarar });
     }
     if (!d?.pago_em) {
-      p.push({ tipo: "tmt_pagar", mes, descricao: `Taxa turística ${mes}: pagar à CM Almada`, prazo: prazos.pagar });
+      p.push({ ...base, tipo: "tmt_pagar", descricao: `Taxa turística ${mes}: pagar à CM ${al.concelho}`, prazo: prazos.pagar });
     }
   }
   return p;

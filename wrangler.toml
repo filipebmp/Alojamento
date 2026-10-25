@@ -12,16 +12,13 @@ database_id = "SUBSTITUIR_PELO_ID_DA_BASE_DE_DADOS"
 migrations_dir = "migrations"
 
 [vars]
-# Horas antes da hora de check-in a partir das quais o código das chaves fica visível
-HORAS_ANTES_CODIGO = "24"
-# Hora de check-in (hora de Lisboa)
-HORA_CHECKIN = "15:00"
-# Horas após o check-in para os restantes hóspedes preencherem os dados
-HORAS_PRAZO_HOSPEDES = "48"
 # Endereço público da app, usado nos links de check-in enviados aos hóspedes
 URL_PUBLICO = "https://bookgest.pt"
 
-# Segredos (definir com `wrangler secret put NOME`, ou em .dev.vars localmente):
-#   ADMIN_PASSWORD  - palavra-passe de acesso ao painel
-#   SESSION_SECRET  - chave para assinar o cookie de sessão
-#   CODIGO_CHAVES   - código do cofre das chaves
+# A restante configuração (palavra-passe, alojamentos, código do cofre, horários,
+# taxa turística) é feita no painel e guardada na base de dados.
+# Segredos opcionais, só para instalações anteriores à configuração no painel
+# (`wrangler secret put NOME`, ou .dev.vars localmente):
+#   ADMIN_PASSWORD  - palavra-passe enquanto não for definida uma no painel
+#   SESSION_SECRET  - chave do cookie de sessão (sem ela é gerada e guardada na base de dados)
+#   CODIGO_CHAVES   - código do cofre copiado para o primeiro alojamento

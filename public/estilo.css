@@ -11,7 +11,8 @@ body { margin: 0; font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-seri
 header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;
   padding: 12px 16px; background: var(--marca); }
 header a { color: #fff; text-decoration: none; font-weight: 600; }
-header nav { display: flex; gap: 16px; }
+header nav { display: flex; flex-wrap: wrap; gap: 4px 16px; }
+header nav a { white-space: nowrap; }
 main { max-width: 720px; margin: 0 auto; padding: 16px; }
 h1 { font-size: 1.5rem; margin: 8px 0; }
 h2 { font-size: 1.15rem; margin: 20px 0 8px; }
@@ -56,3 +57,5 @@ button:disabled { opacity: .5; }
   color: #fff; background: var(--marca); border-radius: 999px; margin-bottom: 8px; }
 .passos img, .passo-admin img { display: block; width: 100%; height: auto; border-radius: 8px; }
 .passos p { margin: 8px 0 0; white-space: pre-line; }
+.etiqueta { display: inline-block; font-size: .75rem; font-weight: 600; color: var(--marca); border: 1px solid var(--marca);
+  border-radius: 999px; padding: 0 8px; margin-right: 6px; }

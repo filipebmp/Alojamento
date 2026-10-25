@@ -17,8 +17,8 @@ export function pagina(titulo: string, corpo: Conteudo, opcoes: { admin?: boolea
 </head>
 <body>
   ${opcoes.admin
-    ? html`<header><a href="/admin" class="marca">🏠 Alojamento</a>
-        <nav><a href="/admin/reservas/nova">+ Reserva</a><a href="/admin/tmt">Taxa turística</a><a href="/admin/instrucoes">Instruções</a></nav></header>`
+    ? html`<header><a href="/admin" class="marca">🏠 bookgest</a>
+        <nav><a href="/admin/reservas/nova">+ Reserva</a><a href="/admin/tmt">Taxa turística</a><a href="/admin/alojamentos">Alojamentos</a><a href="/admin/definicoes">Definições</a></nav></header>`
     : ""}
   <main>${corpo}</main>
   ${opcoes.admin ? html`<script>if("serviceWorker" in navigator)navigator.serviceWorker.register("/sw.js")</script>` : ""}

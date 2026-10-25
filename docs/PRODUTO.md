@@ -70,13 +70,13 @@ data da última comunicação.
 ## Fases
 
 ### Fase 1 — App instalável por qualquer gestor
-- [ ] Vários alojamentos por gestor (nome, morada, n.º de registo AL, código do
+- [x] Vários alojamentos por gestor (nome, morada, n.º de registo AL, código do
   cofre, hora de check-in, passos de chegada).
-- [ ] Configuração no painel em vez de variáveis do wrangler; assistente de
+- [x] Configuração no painel em vez de variáveis do wrangler; assistente de
   primeiro arranque (palavra-passe, primeiro alojamento).
-- [ ] Regras da taxa turística por alojamento, com predefinições por concelho
+- [x] Regras da taxa turística por alojamento, com predefinições por concelho
   (Almada; restantes a acrescentar só com fonte oficial confirmada).
-- [ ] Migração dos dados da instalação atual sem perdas.
+- [x] Migração dos dados da instalação atual sem perdas.
 
 ### Fase 2 — Plataforma comercial (bookgest.pt)
 - Página de apresentação, preços, registo.

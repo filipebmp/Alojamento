@@ -1,7 +1,7 @@
 import { html } from "hono/html";
 import type { ReservaCompleta } from "../db";
 import { type EstadoCodigo, hospedeCompleto, inicioCodigo, titularCompleto } from "../lib/regras";
-import type { Config, Hospede, Passo } from "../lib/tipos";
+import type { Alojamento, Config, Hospede, Passo } from "../lib/tipos";
 import { dataPt, pagina } from "./layout";
 
 // Página do hóspede: bilingue (PT/EN), porque a maioria dos hóspedes é estrangeira.
@@ -44,14 +44,15 @@ const AVISO_PRIVACIDADE = html`<p class="nota">
 
 export function paginaHospede(
   rc: ReservaCompleta,
+  alojamento: Alojamento,
   estado: EstadoCodigo,
-  codigo: string,
   passos: Passo[],
   cfg: Config,
   erro?: string,
 ) {
   const { reserva: r, hospedes, faturacao } = rc;
   const titulo = html`<h1>Check-in online</h1>
+    <p><strong>${alojamento.nome}</strong>${alojamento.morada ? html`<br>${alojamento.morada}` : ""}</p>
     <p>${r.nome_titular} · ${dataPt(r.checkin)} → ${dataPt(r.checkout)} · ${r.n_hospedes} hóspede(s) / guest(s)</p>
     ${erro ? html`<p class="erro">${erro}</p>` : ""}`;
 
@@ -95,7 +96,9 @@ export function paginaHospede(
 
   const blocoCodigo =
     estado === "disponivel"
-      ? html`<div class="codigo"><p>Código do cofre das chaves / Key box code</p><strong>${codigo}</strong></div>`
+      ? alojamento.codigo_cofre
+        ? html`<div class="codigo"><p>Código do cofre das chaves / Key box code</p><strong>${alojamento.codigo_cofre}</strong></div>`
+        : html`<div class="codigo"><p>Contacte o anfitrião para obter o código. / Please contact your host for the code.</p></div>`
       : html`<div class="codigo"><p>O código fica disponível a partir de / The code will be available from</p>
           <strong class="pequeno">${inicioCodigo(r, cfg).toLocaleString("pt-PT", { timeZone: "Europe/Lisbon", dateStyle: "short", timeStyle: "short" })}</strong>
           <p>Volte a abrir este link. / Open this link again.</p></div>`;

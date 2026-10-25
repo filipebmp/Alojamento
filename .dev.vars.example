@@ -1,3 +1,5 @@
-ADMIN_PASSWORD=muda-isto
-SESSION_SECRET=uma-chave-longa-e-aleatoria
-CODIGO_CHAVES=1234
+# Opcional: sem estes valores, o painel abre o assistente de primeiro arranque
+# e a configuração é feita no próprio painel.
+#ADMIN_PASSWORD=muda-isto
+#SESSION_SECRET=uma-chave-longa-e-aleatoria
+#CODIGO_CHAVES=1234

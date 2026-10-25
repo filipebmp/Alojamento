@@ -2,10 +2,12 @@ import { describe, expect, it } from "vitest";
 import { estadoCodigo, mesesAteAnterior, pendentesReserva, pendentesTmt, prazosTmt } from "../src/lib/regras";
 import type { Config, Faturacao, Hospede, Reserva } from "../src/lib/tipos";
 
-const cfg: Config = { horasAntesCodigo: 24, horaCheckin: "15:00", horasPrazoHospedes: 48 };
+const almada = { valorPorNoiteCents: 200, maxNoites: 5, idadeMinima: 13, diaDeclaracao: 15, diaPagamento: 30 };
+const cfg: Config = { horasAntesCodigo: 24, horaCheckin: "15:00", horasPrazoHospedes: 48, tmt: almada };
 
 const reserva: Reserva = {
   id: 1,
+  alojamento_id: 1,
   token: "t",
   ref_booking: null,
   nome_titular: "Anna",
@@ -112,12 +114,23 @@ describe("taxa turística mensal", () => {
   });
 
   it("calcula prazos (fevereiro sem dia 30)", () => {
-    expect(prazosTmt("2026-09")).toEqual({ declarar: "2026-10-15", pagar: "2026-10-30" });
-    expect(prazosTmt("2027-01")).toEqual({ declarar: "2027-02-15", pagar: "2027-02-28" });
+    expect(prazosTmt("2026-09", almada)).toEqual({ declarar: "2026-10-15", pagar: "2026-10-30" });
+    expect(prazosTmt("2027-01", almada)).toEqual({ declarar: "2027-02-15", pagar: "2027-02-28" });
   });
 
+  const al = { id: 1, concelho: "Almada", regras: almada };
+
   it("pede declaração mesmo em meses sem reservas", () => {
-    const p = pendentesTmt(["2026-09"], [{ mes: "2026-09", declarado_em: "x", pago_em: null }]);
-    expect(p.map((x) => x.tipo)).toEqual(["tmt_pagar"]);
+    const p = pendentesTmt(["2026-09"], [{ alojamento_id: 1, mes: "2026-09", declarado_em: "x", pago_em: null }], al);
+    expect(p.map((x) => [x.tipo, x.descricao])).toEqual([["tmt_pagar", "Taxa turística 2026-09: pagar à CM Almada"]]);
+  });
+
+  it("separa as declarações de cada alojamento", () => {
+    const p = pendentesTmt(["2026-09"], [{ alojamento_id: 2, mes: "2026-09", declarado_em: "x", pago_em: "x" }], al);
+    expect(p.map((x) => x.tipo)).toEqual(["tmt_declarar", "tmt_pagar"]);
+  });
+
+  it("não pede nada em concelhos sem taxa", () => {
+    expect(pendentesTmt(["2026-09"], [], { ...al, regras: { ...almada, valorPorNoiteCents: 0 } })).toEqual([]);
   });
 });
