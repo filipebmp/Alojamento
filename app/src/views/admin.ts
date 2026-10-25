@@ -673,6 +673,13 @@ const SCRIPT_CONCELHO = html`<script>
   const f = sel.form;
   const nota = document.querySelector("[data-nota-concelho]");
   const euros = (c) => (c / 100).toFixed(2).replace(".", ",");
+  // Filtro "só com taxa": as opções são retiradas e repostas (o Safari do iPhone ignora opções escondidas).
+  const todas = [...sel.options];
+  document.querySelector("[data-so-taxa]").addEventListener("change", (e) => {
+    const atual = sel.value;
+    sel.replaceChildren(...todas.filter((o) => !e.target.checked || !o.value || o.hasAttribute("data-taxa") || o.value === atual));
+    sel.value = atual;
+  });
   sel.addEventListener("change", () => {
     const c = dados[sel.value];
     if (!c) return;
@@ -730,8 +737,9 @@ export function paginaAlojamento(
           <select name="concelho" data-concelhos="${JSON.stringify(Object.fromEntries(CONCELHOS.map((c) => [c.nome, { tmt: c.tmt, nota: c.nota, portal: c.portal, iva: IVA_REGIAO[c.regiao] }])))}">
             <option value="">— Escolher —</option>
             ${a?.concelho && !CONCELHOS.some((c) => c.nome === a.concelho) ? html`<option value="${a.concelho}" selected>${a.concelho}</option>` : ""}
-            ${CONCELHOS.map((c) => html`<option value="${c.nome}"${c.nome === a?.concelho ? " selected" : ""}>${c.nome}${c.tmt ? " · com taxa" : ""}</option>`)}
+            ${CONCELHOS.map((c) => html`<option value="${c.nome}"${c.tmt ? " data-taxa" : ""}${c.nome === a?.concelho ? " selected" : ""}>${c.nome}${c.tmt ? " · com taxa" : ""}</option>`)}
           </select></label>
+        <label class="opcao"><input type="checkbox" data-so-taxa> Mostrar só os concelhos com taxa turística</label>
         <p class="nota" data-nota-concelho>Ao escolher o concelho, a taxa turística é preenchida com os valores de referência do
           regulamento municipal. Confirme sempre no site da câmara. Valor vazio ou 0 = sem taxa.</p>
         <label>Valor por hóspede e noite (€)
