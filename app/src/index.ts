@@ -22,6 +22,7 @@ import { compararVersoes } from "../../comum/versoes";
 import { atualizar } from "./lib/atualizacao";
 import type { Plataforma } from "./lib/ical";
 import { listarCalendarios, sincronizarCalendario, sincronizarTodos } from "./lib/importacao";
+import { listarEmails, receberEmails } from "./lib/emails";
 import {
   type EstadoGuardado,
   URL_LICENCAS_PREDEFINIDO,
@@ -63,6 +64,7 @@ import {
   paginaConfigurar,
   paginaConta,
   paginaDefinicoes,
+  paginaEmails,
   paginaInstrucoes,
   paginaLogin,
   paginaNovaReserva,
@@ -324,7 +326,7 @@ for (const caminho of [
   "/admin/alojamentos", "/admin/alojamentos/*", "/admin/instrucoes", "/admin/tmt", "/admin/tmt/*",
   "/admin/definicoes", "/admin/definicoes/*", "/admin/utilizadores", "/admin/utilizadores/*",
   "/admin/reservas/:id/valores", "/admin/reservas/:id/siba", "/admin/reservas/:id/fatura", "/admin/reservas/:id/cancelar",
-  "/admin/reservas/:id/ignorar", "/admin/reservas/:id/manter",
+  "/admin/reservas/:id/ignorar", "/admin/reservas/:id/manter", "/admin/emails", "/admin/emails/*",
 ]) {
   app.use(caminho, soGestor);
 }
@@ -358,6 +360,17 @@ app.get("/admin", async (c) => {
     ),
   ];
   // A equipa só vê o que depende dela: formulários e dados de hóspedes por preencher.
+  // Emails de reserva que precisam do gestor (por associar, ou confirmação do reencaminhamento do Gmail).
+  const porTratar = await c.env.DB.prepare("SELECT estado, COUNT(*) AS n FROM emails_recebidos WHERE estado IN ('por_associar', 'confirmacao') GROUP BY estado")
+    .all<{ estado: string; n: number }>();
+  for (const e of porTratar.results) {
+    todos.push({
+      tipo: "email",
+      descricao: e.estado === "confirmacao" ? "Confirmar o reencaminhamento de emails (Gmail)" : `${e.n} email(s) de reserva por associar`,
+      prazo: null,
+      link: "/admin/emails",
+    });
+  }
   const pendentes = p === "gestor" ? todos : todos.filter((x) => ["completar", "formulario", "dados_hospedes"].includes(x.tipo));
   const avisoBase = p === "gestor" ? avisoLicenca(licenca.chave, licenca.estado, alojamentos.filter((a) => a.ativo).length, agora) : null;
   const aviso = avisoBase && licenca.problemaDesde
@@ -371,7 +384,10 @@ app.get("/admin/reservas/nova", async (c) => {
   if (bloqueio) return bloqueio;
   const ativos = (await listarAlojamentos(c.env.DB)).filter((a) => a.ativo);
   if (!ativos.length) return papel(c) === "gestor" ? c.redirect("/admin/alojamentos/novo") : c.html(paginaSemAcesso());
-  return c.html(paginaNovaReserva(ativos, papel(c)));
+  const q = (k: string) => c.req.query(k) ?? "";
+  // Pré-preenchida a partir de um email de reserva que não foi possível associar.
+  const sugestao = { nome: q("nome"), checkin: q("checkin"), checkout: q("checkout"), n: q("n"), ref: q("ref") };
+  return c.html(paginaNovaReserva(ativos, papel(c), sugestao));
 });
 
 app.post("/admin/reservas", async (c) => {
@@ -867,6 +883,43 @@ export interface EstadoAtualizacao {
 }
 
 // Corre uma vez por dia (cron) e ao guardar a chave. Sem resposta, mantém o último estado conhecido.
+// Emails de reserva reencaminhados: só quando a licença tem endereço (a plataforma tem o serviço ligado).
+async function receberEmailsReservas(env: Env): Promise<void> {
+  const { chave, estado } = await lerLicenca(env.DB);
+  if (!chave || !estado?.emailReservas) return;
+  try {
+    await receberEmails(env.DB, chave, env.URL_LICENCAS || URL_LICENCAS_PREDEFINIDO, env.PLATAFORMA);
+    await env.DB.prepare("DELETE FROM definicoes WHERE chave = 'emails_erro'").run();
+  } catch (e) {
+    console.error("Receção dos emails de reserva falhou", e);
+    await gravarDefinicao(env.DB, "emails_erro", String(e instanceof Error ? e.message : e).slice(0, 200));
+  }
+}
+
+app.get("/admin/emails", async (c) => {
+  const { estado } = await lerLicenca(c.env.DB);
+  return c.html(paginaEmails({
+    endereco: estado?.emailReservas ?? null,
+    privado: !!c.env.CF_API_TOKEN,
+    emails: await listarEmails(c.env.DB),
+    erro: await lerDefinicao(c.env.DB, "emails_erro"),
+    verificado: c.req.query("verificado") === "1",
+  }));
+});
+
+app.post("/admin/emails/verificar", async (c) => {
+  await verificarLicenca(c.env); // obtém o endereço, se ainda não o tiver
+  await receberEmailsReservas(c.env);
+  return c.redirect("/admin/emails?verificado=1");
+});
+
+app.post("/admin/emails/:id/arquivar", async (c) => {
+  await c.env.DB.prepare("UPDATE emails_recebidos SET estado = 'arquivado' WHERE id = ? AND estado IN ('por_associar', 'confirmacao')")
+    .bind(Number(c.req.param("id")))
+    .run();
+  return c.redirect("/admin/emails");
+});
+
 async function verificarLicenca(env: Env): Promise<void> {
   const chave = await lerDefinicao(env.DB, "licenca_chave");
   if (!chave) return;
@@ -877,6 +930,7 @@ async function verificarLicenca(env: Env): Promise<void> {
       estado: r.estado,
       alojamentosPagos: r.alojamentosPagos,
       fimTeste: r.fimTeste ?? null,
+      emailReservas: r.emailReservas ?? null,
       verificadoEm: new Date().toISOString(),
     };
     await gravarDefinicao(env.DB, "licenca_estado", JSON.stringify(guardado));
@@ -1088,6 +1142,7 @@ export default {
     ctx.waitUntil((async () => {
       await prepararInstalacao(env.DB, env.CODIGO_CHAVES);
       await sincronizarTodos(env.DB);
+      await receberEmailsReservas(env);
       const estado = await lerDefinicao(env.DB, "licenca_estado");
       const ultima = estado ? Date.parse((JSON.parse(estado) as EstadoGuardado).verificadoEm) : 0;
       if (Date.now() - ultima > 20 * 3_600_000 || (await lerDefinicao(env.DB, "licenca_erro"))) await verificarLicenca(env);

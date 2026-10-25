@@ -23,6 +23,7 @@ export interface Licenca {
   cf_base: string | null;
   versao_publicada: string | null;
   erro_atualizacao: string | null;
+  email_token: string | null;
   criado_em: string;
   atualizado_em: string;
 }

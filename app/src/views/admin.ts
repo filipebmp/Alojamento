@@ -8,6 +8,8 @@ import { SENHA_MINIMA } from "../../../comum/senha";
 import { calcularTmt, cobraTmt } from "../lib/tmt";
 import type { Alojamento, DeclaracaoTmt, Passo } from "../lib/tipos";
 import { type Calendario, NOMES_PLATAFORMA } from "../lib/importacao";
+import type { EmailRecebido } from "../lib/emails";
+import type { DadosEmailReserva } from "../../../comum/emails";
 import { N_CODIGOS, type Papel, type Utilizador } from "../lib/utilizadores";
 import { dataPt, pagina } from "./layout";
 
@@ -55,7 +57,7 @@ export function paginaPainel(
     <h1>Pendentes</h1>
     ${pendentes.length
       ? html`<ul class="pendentes">${pendentes.map((p) => html`<li class="${classePrazo(p.prazo, hoje)}">
-          <a href="${p.reservaId ? `/admin/reservas/${p.reservaId}` : "/admin/tmt"}">${etiqueta(p.alojamentoId)}${p.descricao}</a>
+          <a href="${p.link ?? (p.reservaId ? `/admin/reservas/${p.reservaId}` : "/admin/tmt")}">${etiqueta(p.alojamentoId)}${p.descricao}</a>
           ${p.prazo ? html`<span class="prazo">até ${dataPt(p.prazo)}</span>` : ""}</li>`)}</ul>`
       : html`<p>✅ Nada pendente.</p>`}
     <h2>Próximas reservas</h2>
@@ -64,7 +66,11 @@ export function paginaPainel(
   `, { admin: papel === "gestor" ? true : "equipa" });
 }
 
-export function paginaNovaReserva(alojamentos: Alojamento[], papel: Papel) {
+export function paginaNovaReserva(
+  alojamentos: Alojamento[],
+  papel: Papel,
+  s: { nome?: string; checkin?: string; checkout?: string; n?: string; ref?: string } = {},
+) {
   return pagina("Nova reserva", html`<h1>Nova reserva</h1>
     <form method="post" action="/admin/reservas">
       ${alojamentos.length === 1
@@ -72,11 +78,11 @@ export function paginaNovaReserva(alojamentos: Alojamento[], papel: Papel) {
         : html`<label>Alojamento <select name="alojamento_id" required>
             <option value=""></option>
             ${alojamentos.map((a) => html`<option value="${a.id}">${a.nome}</option>`)}</select></label>`}
-      <label>Nome do titular <input name="nome_titular" required></label>
-      <label>Referência Booking <input name="ref_booking" inputmode="numeric"></label>
-      <label>Check-in <input type="date" name="checkin" required></label>
-      <label>Check-out <input type="date" name="checkout" required></label>
-      <label>N.º de hóspedes <input type="number" name="n_hospedes" min="1" value="2" required></label>
+      <label>Nome do titular <input name="nome_titular" required value="${s.nome ?? ""}"></label>
+      <label>Referência da reserva <input name="ref_booking" value="${s.ref ?? ""}"></label>
+      <label>Check-in <input type="date" name="checkin" required value="${s.checkin ?? ""}"></label>
+      <label>Check-out <input type="date" name="checkout" required value="${s.checkout ?? ""}"></label>
+      <label>N.º de hóspedes <input type="number" name="n_hospedes" min="1" value="${s.n || 2}" required></label>
       ${papel === "gestor"
         ? html`<label>Valor total pago pelo hóspede (€, sem taxa turística)
             <input name="valor_total" inputmode="decimal" placeholder="0,00"></label>
@@ -524,6 +530,7 @@ export function paginaDefinicoes(opcoes: {
     <ul class="lista">
       <li><a href="/admin/conta"><strong>A minha conta</strong><span class="prazo">Email, palavra-passe, códigos de recuperação</span></a></li>
       <li><a href="/admin/utilizadores"><strong>Utilizadores</strong><span class="prazo">Gestores e equipa com acesso ao painel</span></a></li>
+      <li><a href="/admin/emails"><strong>Emails de reserva</strong><span class="prazo">Reencaminhar os emails do Booking e do Airbnb</span></a></li>
     </ul>
     <section class="cartao">
       <h2>Licença</h2>
@@ -673,4 +680,56 @@ function seccaoCalendarios(a: Alojamento, calendarios: Calendario[]) {
       <p><strong>Airbnb:</strong> Anúncios → o seu anúncio → Disponibilidade → Ligar calendários → Exportar calendário → copiar o link.</p>
     </details>
   </section>`;
+}
+
+// ---------- Emails de reserva ----------
+
+const NOMES_ESTADO_EMAIL: Record<string, string> = { associado: "✅ associado", por_associar: "⚠️ por associar", confirmacao: "📩 confirmação", arquivado: "arquivado" };
+
+export function paginaEmails(o: { endereco: string | null; privado: boolean; emails: EmailRecebido[]; erro: string | null; verificado?: boolean }) {
+  const linha = (e: EmailRecebido) => {
+    const d = JSON.parse(e.dados) as DadosEmailReserva;
+    const criar = `/admin/reservas/nova?${new URLSearchParams({ nome: d.nome ?? "", checkin: d.checkin ?? "", checkout: d.checkout ?? "", n: String(d.hospedes ?? ""), ref: d.codigo ?? "" })}`;
+    return html`<section class="cartao">
+      <p><strong>${d.assunto || "(sem assunto)"}</strong><br>
+        <small>${dataPt(e.recebido_em)} · ${d.plataforma === "desconhecida" ? "" : `${d.plataforma === "airbnb" ? "Airbnb" : "Booking"} · `}${NOMES_ESTADO_EMAIL[e.estado] ?? e.estado}</small></p>
+      ${e.estado === "confirmacao"
+        ? html`<p>O Gmail pede para confirmar o reencaminhamento para o bookgest.
+            ${d.confirmacao?.codigo ? html`Código: <strong>${d.confirmacao.codigo}</strong>.` : ""}
+            ${d.confirmacao?.link ? html`<a href="${d.confirmacao.link}" target="_blank" rel="noopener">Confirmar no Gmail</a>` : ""}</p>`
+        : html`<p class="nota">${[d.nome, d.checkin && d.checkout ? `${dataPt(d.checkin)} → ${dataPt(d.checkout)}` : "", d.hospedes ? `${d.hospedes} hóspede(s)` : "",
+            d.codigo ?? "", d.totalCents ? euros(d.totalCents) : ""].filter(Boolean).join(" · ") || (d.texto ? d.texto.slice(0, 300) : "Sem dados reconhecidos")}</p>`}
+      <div class="botoes">
+        ${e.reserva_id ? html`<a class="botao" href="/admin/reservas/${e.reserva_id}">Ver reserva</a>` : ""}
+        ${e.estado === "por_associar" && d.tipo !== "cancelada" ? html`<a class="botao" href="${criar}">Criar reserva</a>` : ""}
+        ${e.estado === "por_associar" || e.estado === "confirmacao"
+          ? html`<form method="post" action="/admin/emails/${e.id}/arquivar"><button>${e.estado === "confirmacao" ? "Já confirmei" : "Arquivar"}</button></form>`
+          : ""}
+      </div>
+    </section>`;
+  };
+  return pagina("Emails de reserva", html`<h1>Emails de reserva</h1>
+    ${o.endereco
+      ? html`<section class="cartao">
+          <p>Reencaminhe para este endereço os emails de reserva do Booking e do Airbnb. O bookgest completa as reservas
+            (nome, hóspedes, valores) ou cria-as.</p>
+          <p class="chave"><code>${o.endereco}</code></p>
+          <button type="button" data-texto="${o.endereco}" onclick="navigator.clipboard.writeText(this.dataset.texto).then(() => this.textContent = 'Copiado ✓')">Copiar</button>
+          <details><summary>Como configurar</summary>
+            <p><strong>Booking:</strong> Extranet → Propriedade → Detalhes de contacto → acrescentar este endereço aos contactos que recebem as reservas.</p>
+            <p><strong>Airbnb</strong> (envia só para o email da conta): no Gmail → Definições → Filtros → criar filtro com
+              <em>De: automated@airbnb.com</em> → Reencaminhar para este endereço. O Gmail pede confirmação: o código aparece
+              aqui em baixo uns minutos depois. No Outlook: Regras → Reencaminhar.</p>
+          </details>
+          ${o.privado
+            ? html`<p class="nota">ℹ️ A sua instalação está numa conta Cloudflare sua: ao reencaminhar, os emails de reserva passam
+                pelos servidores do bookgest, que extraem só os dados da reserva e não guardam o email.</p>`
+            : ""}
+        </section>`
+      : html`<p class="nota">O endereço de reencaminhamento ainda não está disponível (precisa da licença ativa e verificada).</p>`}
+    ${o.erro ? html`<p class="erro">Última verificação falhou: ${o.erro}</p>` : ""}
+    ${o.verificado ? html`<p>✅ Verificado.</p>` : ""}
+    <form method="post" action="/admin/emails/verificar"><button>Verificar emails agora</button></form>
+    <h2>Recebidos</h2>
+    ${o.emails.length ? o.emails.map(linha) : html`<p>Ainda não chegou nenhum email.</p>`}`, { admin: true });
 }

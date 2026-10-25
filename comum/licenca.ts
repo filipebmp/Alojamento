@@ -16,6 +16,7 @@ export interface RespostaLicenca {
   alojamentosPagos: number;
   versaoAtual?: string | null; // versão mais recente publicada (atualização automática)
   fimTeste?: string | null; // fim do período experimental (licenças de teste)
+  emailReservas?: string | null; // endereço para reencaminhar os emails de reserva (se ativo)
 }
 
 export function pedidoValido(p: unknown): p is PedidoLicenca {
@@ -57,4 +58,14 @@ export function pedidoEmailValido(p: unknown): p is PedidoEmailRecuperacao {
     typeof x.para === "string" && x.para.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(x.para) &&
     typeof x.link === "string" && x.link.length <= 512 && linkRecuperacaoValido(x.link)
   );
+}
+
+// ---------- Emails de reserva (Booking, Airbnb) reencaminhados para reservas-<código>@bookgest.pt ----------
+
+export const CAMINHO_API_EMAILS_RESERVAS = "/api/v1/emails-reservas";
+
+export interface EmailReservaEntregue {
+  id: number;
+  recebidoEm: string;
+  dados: unknown; // DadosEmailReserva (plataforma/src/emails-reservas.ts)
 }

@@ -1,6 +1,8 @@
 import { type Context, Hono } from "hono";
 import { deleteCookie, getCookie, getSignedCookie, setCookie, setSignedCookie } from "hono/cookie";
 import {
+  CAMINHO_API_EMAILS_RESERVAS,
+  type EmailReservaEntregue,
   CAMINHO_API_EMAIL_RECUPERACAO,
   CAMINHO_API_LICENCA,
   type RespostaLicenca,
@@ -9,6 +11,8 @@ import {
 } from "../../comum/licenca";
 import { iguais } from "../../comum/senha";
 import { ErroCloudflare } from "../../comum/cloudflare";
+import PostalMime from "postal-mime";
+import { htmlParaTexto, lerEmailReserva } from "./emails-reservas";
 import { CAMINHO_API_VERSOES, CHAVE_PUBLICA_VERSOES, type Versao, type VersaoAssinada, assinaturaConfere, compararVersoes } from "../../comum/versoes";
 import {
   type ResultadoInstalacao,
@@ -81,6 +85,10 @@ type Env = {
   DOMINIO_ALOJADAS?: string; // ex.: "bookgest.pt" → instalações alojadas em <nome>.bookgest.pt
   ZONA_ID?: string; // id da zona do domínio no Cloudflare (se vazio, é procurado pela API)
   REGISTOS_ABERTOS?: string; // "sim" para aceitar registos com período experimental
+  // Domínio dos endereços reservas-<código>@… (exige Email Routing com "catch-all" para esta app). Vazio = desligado.
+  DOMINIO_EMAIL_RESERVAS?: string;
+  // Outros endereços do domínio (ex.: contacto@) são reencaminhados para aqui (endereço verificado no Email Routing).
+  ENCAMINHAR_EMAILS?: string;
   // Endereço da instalação que servia o bookgest.pt antes da plataforma: os links já enviados a hóspedes continuam a funcionar.
   INSTALACAO_ANTIGA?: string;
 };
@@ -228,6 +236,7 @@ app.post(CAMINHO_API_LICENCA, async (c) => {
     alojamentosPagos: licenca.alojamentos_pagos,
     versaoAtual: await versaoMaisRecente(c.env.DB),
     fimTeste: licenca.tipo === "teste" ? licenca.valida_ate : null,
+    emailReservas: await enderecoEmailReservas(c.env, licenca),
   });
 });
 
@@ -803,9 +812,72 @@ app.post("/gestao/faturas/:id/manual", async (c) => {
   return c.redirect("/gestao/faturas");
 });
 
+// ---------- Emails de reserva reencaminhados pelos gestores ----------
+
+const TAMANHO_MAXIMO_EMAIL = 2_000_000;
+const EMAILS_POR_DIA = 200;
+const DIAS_RETENCAO_EMAILS = 7;
+
+// Endereço de cada licença (código aleatório: ninguém consegue adivinhar e enviar reservas falsas).
+async function enderecoEmailReservas(env: Env, l: Licenca): Promise<string | null> {
+  if (!env.DOMINIO_EMAIL_RESERVAS) return null;
+  let token = l.email_token;
+  if (!token) {
+    token = [...crypto.getRandomValues(new Uint8Array(10))].map((b) => "abcdefghijkmnpqrstuvwxyz23456789"[b % 32]).join("");
+    await env.DB.prepare("UPDATE licencas SET email_token = ? WHERE id = ? AND email_token IS NULL").bind(token, l.id).run();
+    token = (await env.DB.prepare("SELECT email_token FROM licencas WHERE id = ?").bind(l.id).first<string>("email_token"))!;
+  }
+  return `reservas-${token}@${env.DOMINIO_EMAIL_RESERVAS}`;
+}
+
+async function receberEmail(message: ForwardableEmailMessage, env: Env): Promise<void> {
+  const token = message.to.toLowerCase().match(/^reservas-([a-z0-9]{8,20})@/)?.[1];
+  if (!token) {
+    if (env.ENCAMINHAR_EMAILS) return message.forward(env.ENCAMINHAR_EMAILS);
+    return message.setReject("Endereço desconhecido");
+  }
+  const licenca = await env.DB.prepare("SELECT * FROM licencas WHERE email_token = ?").bind(token).first<Licenca>();
+  if (!licenca) return message.setReject("Endereço desconhecido");
+  if (message.rawSize > TAMANHO_MAXIMO_EMAIL) return message.setReject("Mensagem demasiado grande");
+  const ontem = new Date(Date.now() - 86_400_000).toISOString();
+  const n = await env.DB.prepare("SELECT COUNT(*) AS n FROM emails_reservas WHERE licenca_id = ? AND recebido_em > ?").bind(licenca.id, ontem).first<number>("n");
+  if ((n ?? 0) >= EMAILS_POR_DIA) return message.setReject("Demasiadas mensagens");
+
+  const email = await PostalMime.parse(message.raw);
+  const texto = email.text?.trim() || htmlParaTexto(email.html ?? "");
+  const dados = lerEmailReserva({ de: email.from?.address ?? message.from, assunto: email.subject ?? "", texto });
+  const agora = new Date();
+  await env.DB.prepare("INSERT INTO emails_reservas (licenca_id, dados, recebido_em, expira_em) VALUES (?, ?, ?, ?)")
+    .bind(licenca.id, JSON.stringify(dados), agora.toISOString(), new Date(agora.getTime() + DIAS_RETENCAO_EMAILS * 86_400_000).toISOString())
+    .run();
+}
+
+// A instalação vai buscar os dados pendentes e confirma-os (são apagados logo a seguir).
+app.post(CAMINHO_API_EMAILS_RESERVAS, async (c) => {
+  const p = await c.req.json<{ chave?: string; confirmar?: number[] }>().catch(() => null);
+  const licenca = typeof p?.chave === "string" ? await obterLicencaPorChave(c.env.DB, p.chave) : null;
+  if (!licenca) return c.json({ erro: "Licença desconhecida" }, 403);
+  const confirmar = (p?.confirmar ?? []).filter((x) => Number.isInteger(x)).slice(0, 500);
+  if (confirmar.length) {
+    await c.env.DB.prepare(`DELETE FROM emails_reservas WHERE licenca_id = ? AND id IN (${confirmar.map(() => "?").join(",")})`)
+      .bind(licenca.id, ...confirmar)
+      .run();
+  }
+  const itens = (await c.env.DB.prepare("SELECT id, dados, recebido_em FROM emails_reservas WHERE licenca_id = ? ORDER BY id LIMIT 50")
+    .bind(licenca.id)
+    .all<{ id: number; dados: string; recebido_em: string }>()).results;
+  return c.json<{ itens: EmailReservaEntregue[] }>({ itens: itens.map((i) => ({ id: i.id, recebidoEm: i.recebido_em, dados: JSON.parse(i.dados) })) });
+});
+
 export default {
   fetch: app.fetch,
   async scheduled(_evento: ScheduledController, env: Env, ctx: ExecutionContext) {
-    ctx.waitUntil(atualizarAlojadas(env));
+    ctx.waitUntil((async () => {
+      await env.DB.prepare("DELETE FROM emails_reservas WHERE expira_em < ?").bind(new Date().toISOString()).run();
+      await atualizarAlojadas(env);
+    })());
+  },
+  async email(message: ForwardableEmailMessage, env: Env) {
+    await receberEmail(message, env);
   },
 } satisfies ExportedHandler<Env>;

@@ -55,7 +55,7 @@ export function prazoDadosHospedes(r: Reserva, cfg: Config): Date {
   return new Date(instanteLisboa(r.checkin, cfg.horaCheckin).getTime() + cfg.horasPrazoHospedes * HORA);
 }
 
-export type TipoPendente = "completar" | "desaparecida" | "formulario" | "dados_hospedes" | "siba" | "fatura" | "tmt_divergente" | "tmt_declarar" | "tmt_pagar";
+export type TipoPendente = "email" | "completar" | "desaparecida" | "formulario" | "dados_hospedes" | "siba" | "fatura" | "tmt_divergente" | "tmt_declarar" | "tmt_pagar";
 
 export interface Pendente {
   tipo: TipoPendente;
@@ -64,6 +64,7 @@ export interface Pendente {
   reservaId?: number;
   alojamentoId?: number;
   mes?: string;
+  link?: string;
 }
 
 export function pendentesReserva(

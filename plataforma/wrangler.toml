@@ -36,6 +36,11 @@ CF_SUBDOMINIO = "filipebmp"
 DOMINIO_ALOJADAS = "bookgest.pt"
 # Id da zona bookgest.pt (vazio = procurado pela API; precisa da permissão Zone:Read na chave)
 ZONA_ID = "c67a66345d356160d3badf42ed7ebee0"
+# Emails de reserva reencaminhados pelos gestores: reservas-<código>@<domínio>. Vazio = desligado.
+# Exige no Cloudflare: Email Routing ativo em bookgest.pt e a regra "catch-all" a enviar para esta app.
+DOMINIO_EMAIL_RESERVAS = ""
+# Para onde vão os outros emails de bookgest.pt (ex.: contacto@): um endereço verificado no Email Routing
+ENCAMINHAR_EMAILS = ""
 # "sim" para mostrar o botão de compra (exige também STRIPE_PRECO e STRIPE_SECRET_KEY)
 VENDAS_ABERTAS = "sim"
 # Id do preço mensal por alojamento no Stripe (price_…), com IVA incluído
