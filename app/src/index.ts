@@ -36,7 +36,7 @@ import {
 import { estadoCodigo, mesesAteAnterior, ordenarPendentes, pendentesReserva, pendentesTmt } from "./lib/regras";
 import { SENHA_MINIMA, iguais, verificarSenha } from "../../comum/senha";
 import { calcularTmt, cobraTmt } from "./lib/tmt";
-import type { Alojamento, Reserva } from "./lib/tipos";
+import type { Alojamento, DeclaracaoTmt, Reserva } from "./lib/tipos";
 import {
   type Papel,
   type Utilizador,
@@ -489,6 +489,9 @@ app.get("/admin/reservas/:id", async (c) => {
     teste: cfgFaturacao?.programa === "vendus" && cfgFaturacao.teste,
     erro: c.req.query("erro_fatura")?.slice(0, 400) ?? null,
     aviso: c.req.query("aviso_fatura")?.slice(0, 400) ?? null,
+    declaracaoTmt: await c.env.DB.prepare("SELECT * FROM declaracoes_tmt_alojamento WHERE alojamento_id = ? AND mes = ?")
+      .bind(alojamento.id, rc.reserva.checkin.slice(0, 7))
+      .first<DeclaracaoTmt>(),
   }));
 });
 

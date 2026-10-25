@@ -78,7 +78,7 @@ export function paginaReserva(
   pendentes: Pendente[],
   agora: Date,
   papel: Papel,
-  faturacao: { programa: Programa | null; teste?: boolean; erro?: string | null; aviso?: string | null } = { programa: null },
+  faturacao: { programa: Programa | null; teste?: boolean; erro?: string | null; aviso?: string | null; declaracaoTmt?: DeclaracaoTmt | null } = { programa: null },
 ) {
   const gestor = papel === "gestor";
   const { reserva: r, hospedes, faturacao: f } = rc;
@@ -105,7 +105,29 @@ export function paginaReserva(
     const c = o.feito ? "feito" : o.p ? (classePrazo(o.p.prazo, hoje) === "atrasado" ? "atrasado" : "atencao") : "";
     return html`<li class="${c}"><span class="marca-passo">${o.feito ? icone("visto", 14) : ""}</span>
       <span class="texto"><strong>${o.titulo}</strong><span>${o.sub}${o.p?.prazo ? ` · até ${dataPt(o.p.prazo)}` : ""}</span></span>
-      ${o.acao ? html`<a href="#${o.ancora}">${o.acao}</a>` : ""}</li>`;
+      ${o.acao ? html`<a href="${o.ancora.startsWith("/") ? o.ancora : `#${o.ancora}`}">${o.acao}</a>` : ""}</li>`;
+  };
+  // Taxa turística: fica feita quando a declaração do mês do check-in está declarada e paga (em Taxas).
+  const passoTmt = () => {
+    const divergente = pendente("tmt_divergente");
+    if (divergente) return passo({ titulo: "Taxa turística", sub: "Valor cobrado diferente do devido", p: divergente, ancora: "tmt", acao: "Ver" });
+    const mes = r.checkin.slice(0, 7);
+    const d = faturacao.declaracaoTmt;
+    const prazos = prazosTmt(mes, regras);
+    const base = `${euros(tmt.valorCents)} · ${nomeMes(r.checkin)}`;
+    if (d?.declarado_em && d.pago_em) return passo({ titulo: "Taxa turística", sub: `${base} · declarada e paga`, feito: true, ancora: "tmt" });
+    const falta = d?.declarado_em
+      ? { sub: `${base} · declarada, falta pagar`, prazo: prazos.pagar }
+      : { sub: `${base} · por declarar`, prazo: prazos.declarar };
+    // Declara-se no mês seguinte ao do check-in: até lá o passo fica neutro.
+    const ativo = hoje.slice(0, 7) > mes;
+    return passo({
+      titulo: "Taxa turística",
+      sub: falta.sub,
+      p: ativo ? { tipo: "tmt_declarar", descricao: "", prazo: falta.prazo } : undefined,
+      ancora: gestor ? "/admin/tmt" : "tmt",
+      acao: ativo ? "Taxas" : undefined,
+    });
   };
   const completos = hospedes.filter(hospedeCompleto).length;
   const hospedesFeitos = completos >= r.n_hospedes && hospedes.length >= r.n_hospedes;
@@ -139,15 +161,7 @@ export function paginaReserva(
             ancora: "fatura",
             acao: r.fatura_emitida_em ? undefined : "Registar",
           }),
-          ...(cobraTmt(regras)
-            ? [passo({
-                titulo: "Taxa turística",
-                sub: pendente("tmt_divergente") ? "Valor cobrado diferente do devido" : `${euros(tmt.valorCents)} · declaração de ${nomeMes(r.checkin)}`,
-                p: pendente("tmt_divergente"),
-                ancora: "tmt",
-                acao: pendente("tmt_divergente") ? "Ver" : undefined,
-              })]
-            : []),
+          ...(cobraTmt(regras) ? [passoTmt()] : []),
         ]
       : []),
   ];
