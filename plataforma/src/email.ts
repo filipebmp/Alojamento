@@ -89,3 +89,12 @@ export function emailInstalacaoPronta(d: { url: string; linkConta: string | null
 ${d.linkConta ? `<p>Falta criar a sua conta de gestor (este link só funciona uma vez):</p>${botao(d.linkConta, "Criar a minha conta")}` : ""}`,
   };
 }
+
+export function emailEnderecos(urls: string[]) {
+  return {
+    assunto: "O endereço do seu bookgest",
+    texto: `Para entrar no seu bookgest:\n${urls.map((u) => `${u}/login`).join("\n")}\n\nGuarde o endereço nos favoritos ou no ecrã principal do telemóvel.`,
+    html: `<p>Para entrar no seu bookgest:</p>${urls.map((u) => botao(`${u}/login`, u.replace(/^https:\/\//, ""))).join("")}
+<p style="color:#5d6964">Guarde o endereço nos favoritos ou no ecrã principal do telemóvel.</p>`,
+  };
+}

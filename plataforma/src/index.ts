@@ -14,6 +14,7 @@ import { type ResultadoInstalacao, atualizarAlojada, instalar, nomeAlojado, prec
 import {
   type ConfigEmail,
   emailConfirmarRegisto,
+  emailEnderecos,
   emailInstalacaoPronta,
   emailLicencaCortesia,
   emailRecuperacao,
@@ -38,6 +39,7 @@ import { type CheckoutSession, type Evento, type Invoice, type Price, type Subsc
 import {
   paginaAssinar,
   paginaCriar,
+  paginaEntrar as paginaEntrarCliente,
   paginaInstalado,
   paginaInstalar,
   paginaInstalarCloudflare,
@@ -356,6 +358,37 @@ async function enviarInstalacaoPronta(env: Env, l: Licenca, r: ResultadoInstalac
 }
 
 app.get("/termos", (c) => c.html(paginaTermos(c.env.CONTACTO || null)));
+
+// Entrar: cada cliente tem o seu endereço. Envia-o por email (a página não revela se o email é cliente).
+app.get("/entrar", (c) => c.html(paginaEntrarCliente()));
+
+app.post("/entrar", async (c) => {
+  const { email } = await c.req.parseBody<{ email: string }>();
+  const e = String(email ?? "").trim().toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)) return c.html(paginaEntrarCliente({ erro: "Indique um email válido." }), 400);
+  const cfg = configEmail(c.env);
+  const licencas = (await c.env.DB.prepare(
+    `SELECT l.id, l.url_instalacao FROM licencas l JOIN clientes c ON c.id = l.cliente_id
+     WHERE lower(c.email) = ? AND l.url_instalacao IS NOT NULL ORDER BY l.id`,
+  ).bind(e).all<{ id: number; url_instalacao: string }>()).results;
+  if (cfg && licencas.length) {
+    const para = await hashEmail(e);
+    const recentes = await c.env.DB.prepare("SELECT COUNT(*) AS n FROM envios_email WHERE para_hash = ? AND enviado_em > ?")
+      .bind(para, new Date(Date.now() - 3_600_000).toISOString())
+      .first<number>("n");
+    if ((recentes ?? 0) < LIMITE_POR_DESTINATARIO_HORA) {
+      try {
+        await enviarEmail(cfg, { para: e, responderPara: c.env.CONTACTO || null, ...emailEnderecos([...new Set(licencas.map((l) => l.url_instalacao))]) });
+        await c.env.DB.prepare("INSERT INTO envios_email (licenca_id, para_hash, enviado_em) VALUES (?, ?, ?)")
+          .bind(licencas[0].id, para, new Date().toISOString())
+          .run();
+      } catch (err) {
+        console.error("Email com os endereços falhou", err);
+      }
+    }
+  }
+  return c.html(paginaEntrarCliente({ enviado: true }));
+});
 
 const registosAbertos = (env: Env) => env.REGISTOS_ABERTOS === "sim" && alojamentoDisponivel(env) && !!configEmail(env);
 

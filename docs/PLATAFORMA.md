@@ -130,5 +130,5 @@ openssl pkey -in bookgest-assinatura.pem -pubout -outform DER | tail -c 32 | bas
 - Rotas da plataforma no Caddy, enquanto o bookgest.pt passa pelo servidor Hetzner:
 
 ```bash
-sed -i 's#@plataforma path .*#@plataforma path /gestao /gestao/* /site.css /instalar /instalar/* /api/* /registar /registar/* /criar /assinar /obrigado /comprar /termos /stripe/*#' /opt/proxy/sites/bookgest.caddy && bash /opt/proxy/recarregar.sh
+sed -i 's#@plataforma path .*#@plataforma path /gestao /gestao/* /site.css /instalar /instalar/* /api/* /registar /registar/* /criar /assinar /obrigado /comprar /termos /entrar /stripe/*#' /opt/proxy/sites/bookgest.caddy && bash /opt/proxy/recarregar.sh
 ```

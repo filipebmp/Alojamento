@@ -22,7 +22,7 @@ export function pagina(titulo: string, corpo: Conteudo, opcoes: { gestao?: boole
   <header><a href="${opcoes.gestao ? "/gestao" : "/"}" class="marca">🏠 bookgest${opcoes.gestao ? " · gestão" : ""}</a>
     ${opcoes.gestao
       ? html`<nav><a href="/gestao">Licenças</a><a href="/gestao/faturas">Faturas</a></nav>`
-      : html`<nav><a href="/#precos">Preços</a>${opcoes.portal ? html`<a href="${opcoes.portal}">A minha assinatura</a>` : ""}</nav>`}</header>
+      : html`<nav><a href="/#precos">Preços</a>${opcoes.portal ? html`<a href="${opcoes.portal}">Assinatura</a>` : ""}<a href="/entrar">Entrar</a></nav>`}</header>
   <main>${corpo}</main>
 </body>
 </html>`;
