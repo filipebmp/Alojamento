@@ -269,6 +269,7 @@ export function paginaMais() {
   const itens: [NomeIcone, string, string, string][] = [
     ["alojamentos", "Alojamentos", "/admin/alojamentos", "Dados, código das chaves, calendários e instruções"],
     ["emails", "Emails de reserva", "/admin/emails", "Reencaminhar os emails do Booking e do Airbnb"],
+    ["tmt", "Faturação", "/admin/definicoes/faturacao", "Ligar o programa de faturação"],
     ["definicoes", "Definições", "/admin/definicoes", "Licença, versão"],
     ["conta", "Utilizadores", "/admin/utilizadores", "Gestores e equipa com acesso ao painel"],
     ["conta", "A minha conta", "/admin/conta", "Email, palavra-passe, códigos de recuperação"],

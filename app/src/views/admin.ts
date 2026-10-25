@@ -15,6 +15,7 @@ import { dataCurta, dataPt, icone, nomeMes, pagina } from "./layout";
 import { chipOrigem, classePrazo } from "./painel";
 import { diferencaDias } from "../lib/datas";
 import { REGIMES_IVA } from "../lib/faturacao";
+import { NOMES_PROGRAMA, type Programa } from "../lib/programas-faturacao";
 
 export function paginaLogin(opcoes: { erro?: string; legado?: boolean; email?: string } = {}) {
   return pagina("Entrar", html`<div class="entrada">
@@ -77,6 +78,7 @@ export function paginaReserva(
   pendentes: Pendente[],
   agora: Date,
   papel: Papel,
+  faturacao: { programa: Programa | null; teste?: boolean; erro?: string | null; aviso?: string | null } = { programa: null },
 ) {
   const gestor = papel === "gestor";
   const { reserva: r, hospedes, faturacao: f } = rc;
@@ -248,11 +250,24 @@ export function paginaReserva(
             <dt>Alojamento (${alojamento.regime_iva === "isento" ? "isento de IVA" : `IVA ${alojamento.regime_iva}% incluído`})</dt><dd>${euros(r.valor_total_cents)}</dd>
             ${cobraTmt(regras) ? html`<dt>Taxa municipal turística (não sujeita a IVA)</dt><dd>${euros(tmt.valorCents)}</dd>` : ""}</dl>`
         : html`<p>À espera dos dados de faturação do hóspede.</p>`}
+      ${faturacao.erro ? html`<p class="aviso">A fatura não foi emitida: ${faturacao.erro}</p>` : ""}
+      ${faturacao.aviso ? html`<p class="aviso">${faturacao.aviso}</p>` : ""}
       ${r.fatura_emitida_em
-        ? html`<p>✅ Fatura ${r.fatura_numero} emitida em ${dataPt(r.fatura_emitida_em)}</p>`
-        : html`${f ? html`<p><a class="botao" href="/admin/reservas/${r.id}/fatura/portal">Preparar no Portal das Finanças</a></p>` : ""}
+        ? html`<p>✅ Fatura ${r.fatura_numero} emitida em ${dataPt(r.fatura_emitida_em)}${r.fatura_programa ? ` no ${NOMES_PROGRAMA[r.fatura_programa as Programa] ?? r.fatura_programa}` : ""}</p>
+          ${r.fatura_pdf ? html`<p><a href="${r.fatura_pdf}" target="_blank" rel="noopener">Ver a fatura (PDF)</a></p>` : ""}`
+        : html`${r.fatura_externa_id && r.fatura_programa === "invoicexpress"
+            ? html`<p class="nota">Fatura criada em rascunho no InvoiceXpress. Finalize-a lá e registe o número abaixo, ou emita daqui para a finalizar.</p>`
+            : ""}
+          ${f && faturacao.programa && r.valor_total_cents
+            ? html`<form method="post" action="/admin/reservas/${r.id}/fatura/emitir"
+                onsubmit="this.querySelector('button').disabled = true; this.querySelector('button').textContent = 'A emitir…'">
+                <button>${faturacao.teste ? "Emitir fatura de teste" : "Emitir fatura"} no ${NOMES_PROGRAMA[faturacao.programa]}</button></form>`
+            : ""}
+          ${f && faturacao.programa && !r.valor_total_cents ? html`<p class="nota">Indique o valor pago em Valores para poder emitir a fatura.</p>` : ""}
+          ${f ? html`<p><a class="${faturacao.programa ? "" : "botao"}" href="/admin/reservas/${r.id}/fatura/portal">Preparar no Portal das Finanças</a></p>` : ""}
+          ${f && !faturacao.programa ? html`<p class="nota">Tem programa de faturação? <a href="/admin/definicoes/faturacao">Ligue-o</a> para emitir com um clique.</p>` : ""}
           <form method="post" action="/admin/reservas/${r.id}/fatura" class="linha">
-            <input name="fatura_numero" placeholder="N.º da fatura" required><button>Marcar como emitida</button></form>`}
+            <input name="fatura_numero" placeholder="N.º da fatura" required><button class="secundario">Marcar como emitida</button></form>`}
     </section>
 
     ${cobraTmt(regras)
@@ -581,6 +596,7 @@ export function paginaDefinicoes(opcoes: {
       <li><a href="/admin/conta"><strong>A minha conta</strong><span class="prazo">Email, palavra-passe, códigos de recuperação</span></a></li>
       <li><a href="/admin/utilizadores"><strong>Utilizadores</strong><span class="prazo">Gestores e equipa com acesso ao painel</span></a></li>
       <li><a href="/admin/emails"><strong>Emails de reserva</strong><span class="prazo">Reencaminhar os emails do Booking e do Airbnb</span></a></li>
+      <li><a href="/admin/definicoes/faturacao"><strong>Faturação</strong><span class="prazo">InvoiceXpress, Vendus ou TOConline: emitir a fatura-recibo com um clique</span></a></li>
     </ul>
     <section class="cartao">
       <h2>Licença</h2>

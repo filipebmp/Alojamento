@@ -20,6 +20,9 @@ export interface Reserva {
   incompleta: number;
   ignorada: number;
   desaparecida_em: string | null;
+  fatura_programa: string | null;
+  fatura_externa_id: string | null;
+  fatura_pdf: string | null;
 }
 
 export interface Hospede {

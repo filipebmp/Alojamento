@@ -81,6 +81,8 @@ import { type VistaReservas, paginaCalendario, paginaHoje, paginaMais, paginaRes
 import { barrasCalendario, numerosHoje } from "./lib/painel";
 import { faturaPortal, regimeIvaValido } from "./lib/faturacao";
 import { paisValido } from "./lib/paises";
+import { NOMES_PROGRAMA, emitir, gravarConfigFaturacao, lerConfigFaturacao, lerFormularioFaturacao, testarLigacao } from "./lib/programas-faturacao";
+import { paginaFaturacao } from "./views/faturacao";
 import { paginaFaturaPortal } from "./views/fatura-portal";
 import { ESTATICOS } from "./estaticos.gerado";
 import { VERSAO } from "./versao";
@@ -329,7 +331,7 @@ const soGestor = async (c: Ctx, next: () => Promise<void>) => {
 for (const caminho of [
   "/admin/alojamentos", "/admin/alojamentos/*", "/admin/instrucoes", "/admin/tmt", "/admin/tmt/*",
   "/admin/definicoes", "/admin/definicoes/*", "/admin/utilizadores", "/admin/utilizadores/*",
-  "/admin/reservas/:id/valores", "/admin/reservas/:id/siba", "/admin/reservas/:id/fatura", "/admin/reservas/:id/fatura/portal", "/admin/reservas/:id/cancelar",
+  "/admin/reservas/:id/valores", "/admin/reservas/:id/siba", "/admin/reservas/:id/fatura", "/admin/reservas/:id/fatura/portal", "/admin/reservas/:id/fatura/emitir", "/admin/reservas/:id/cancelar",
   "/admin/reservas/:id/ignorar", "/admin/reservas/:id/manter", "/admin/emails", "/admin/emails/*", "/admin/mais",
 ]) {
   app.use(caminho, soGestor);
@@ -481,7 +483,13 @@ app.get("/admin/reservas/:id", async (c) => {
   // o link para o hóspede usa o endereço público, quando definido.
   const link = new URL(`/c/${rc.reserva.token}`, c.env.URL_PUBLICO || c.req.url).toString();
   const pendentes = ordenarPendentes(pendentesReserva(rc.reserva, rc.hospedes, rc.faturacao, configAlojamento(alojamento), agora));
-  return c.html(paginaReserva(rc, alojamento, link, pendentes, agora, papel(c)));
+  const cfgFaturacao = papel(c) === "gestor" ? await lerConfigFaturacao(c.env.DB) : null;
+  return c.html(paginaReserva(rc, alojamento, link, pendentes, agora, papel(c), {
+    programa: cfgFaturacao?.programa ?? null,
+    teste: cfgFaturacao?.programa === "vendus" && cfgFaturacao.teste,
+    erro: c.req.query("erro_fatura")?.slice(0, 400) ?? null,
+    aviso: c.req.query("aviso_fatura")?.slice(0, 400) ?? null,
+  }));
 });
 
 app.post("/admin/reservas/:id/valores", async (c) => {
@@ -501,6 +509,74 @@ app.post("/admin/reservas/:id/siba", async (c) => {
     .bind(new Date().toISOString(), Number(c.req.param("id")))
     .run();
   return c.redirect(`/admin/reservas/${c.req.param("id")}`);
+});
+
+// Emite a fatura-recibo no programa de faturação ligado nas definições.
+app.post("/admin/reservas/:id/fatura/emitir", async (c) => {
+  const id = Number(c.req.param("id"));
+  const voltar = (q: Record<string, string> = {}) => c.redirect(`/admin/reservas/${id}${Object.keys(q).length ? `?${new URLSearchParams(q)}` : ""}#fatura`);
+  const [rc, cfg] = await Promise.all([obterReserva(c.env.DB, id), lerConfigFaturacao(c.env.DB)]);
+  if (!rc) return c.notFound();
+  const { reserva: r, hospedes, faturacao: f } = rc;
+  if (r.fatura_emitida_em) return voltar();
+  if (!cfg) return voltar({ erro_fatura: "não há programa de faturação ligado (Definições → Faturação)." });
+  if (!f) return voltar({ erro_fatura: "faltam os dados de faturação do hóspede." });
+  if (!r.valor_total_cents) return voltar({ erro_fatura: "indique primeiro o valor pago pelo hóspede." });
+  const a = (await obterAlojamento(c.env.DB, r.alojamento_id))!;
+  const regras = regrasTmt(a);
+  const tmt = cobraTmt(regras) ? calcularTmt(r.checkin, r.checkout, hospedes, regras).valorCents : 0;
+  const dados = { fatura: faturaPortal(r, a, f, tmt), reservaId: r.id, regime: a.regime_iva, email: f.email, hoje: hojeLisboa(new Date()) };
+  try {
+    const { emitida, config } = await emitir(cfg, dados, {
+      idExistente: r.fatura_programa === cfg.programa ? r.fatura_externa_id : null,
+      guardarId: async (externo) => {
+        await c.env.DB.prepare("UPDATE reservas SET fatura_programa = ?, fatura_externa_id = ? WHERE id = ?").bind(cfg.programa, externo, id).run();
+      },
+    });
+    if (config !== cfg) await gravarConfigFaturacao(c.env.DB, config);
+    const teste = cfg.programa === "vendus" && cfg.teste;
+    if (teste || !emitida.numero) {
+      // Rascunho (InvoiceXpress) ou documento de teste (Vendus): a reserva continua por faturar.
+      await c.env.DB.prepare("UPDATE reservas SET fatura_programa = ?, fatura_externa_id = ?, fatura_pdf = ? WHERE id = ?")
+        .bind(cfg.programa, teste ? null : emitida.idExterno, emitida.pdf ?? null, id).run();
+      return voltar({
+        aviso_fatura: teste
+          ? `Fatura de teste ${emitida.numero ?? ""} criada no Vendus (sem valor fiscal). Desligue o modo de teste nas definições para emitir a sério.`
+          : "Fatura criada em rascunho no InvoiceXpress. Confirme-a e finalize-a lá; depois registe o número aqui.",
+      });
+    }
+    await c.env.DB.prepare(
+      "UPDATE reservas SET fatura_programa = ?, fatura_externa_id = ?, fatura_pdf = ?, fatura_numero = ?, fatura_emitida_em = ? WHERE id = ?",
+    ).bind(cfg.programa, emitida.idExterno, emitida.pdf ?? null, emitida.numero, new Date().toISOString(), id).run();
+    return voltar();
+  } catch (e) {
+    return voltar({ erro_fatura: e instanceof Error ? e.message : String(e) });
+  }
+});
+
+// Definições → Faturação
+app.get("/admin/definicoes/faturacao", async (c) =>
+  c.html(paginaFaturacao(await lerConfigFaturacao(c.env.DB), { ok: c.req.query("guardado") === "1" ? "Guardado." : undefined })));
+
+app.post("/admin/definicoes/faturacao", async (c) => {
+  const b = await c.req.parseBody<Record<string, string>>();
+  const atual = await lerConfigFaturacao(c.env.DB);
+  const cfg = lerFormularioFaturacao(b, atual);
+  if (typeof cfg === "string") return c.html(paginaFaturacao(atual, { erro: cfg, form: b }), 400);
+  await gravarConfigFaturacao(c.env.DB, cfg);
+  return c.redirect("/admin/definicoes/faturacao?guardado=1");
+});
+
+app.post("/admin/definicoes/faturacao/testar", async (c) => {
+  const cfg = await lerConfigFaturacao(c.env.DB);
+  if (!cfg) return c.redirect("/admin/definicoes/faturacao");
+  try {
+    const nova = await testarLigacao(cfg);
+    if (nova !== cfg) await gravarConfigFaturacao(c.env.DB, nova);
+    return c.html(paginaFaturacao(nova, { ok: `Ligação ao ${NOMES_PROGRAMA[cfg.programa]} a funcionar.` }));
+  } catch (e) {
+    return c.html(paginaFaturacao(cfg, { erro: `A ligação falhou: ${e instanceof Error ? e.message : String(e)}` }), 502);
+  }
 });
 
 // Ajudante: os campos da fatura-recibo prontos a copiar para o Portal das Finanças.

@@ -27,6 +27,9 @@ const reserva: Reserva = {
   incompleta: 0,
   ignorada: 0,
   desaparecida_em: null,
+  fatura_programa: null,
+  fatura_externa_id: null,
+  fatura_pdf: null,
 };
 
 const titular: Hospede = {
