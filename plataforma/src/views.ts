@@ -29,7 +29,7 @@ export function icone(nome: keyof typeof ICONES, tamanho = 22) {
 export function pagina(
   titulo: string,
   corpo: Conteudo,
-  opcoes: { gestao?: boolean; descricao?: string; portal?: string | null; estreito?: boolean; experimentar?: boolean; contacto?: string | null } = {},
+  opcoes: { gestao?: boolean; descricao?: string; portal?: string | null; estreito?: boolean; experimentar?: boolean; contacto?: string | null; naEntrada?: boolean } = {},
 ) {
   return html`<!doctype html>
 <html lang="pt">
@@ -50,7 +50,7 @@ export function pagina(
     ${opcoes.gestao
       ? html`<nav><a href="/gestao">Licenças</a><a href="/gestao/faturas">Faturas</a></nav>`
       : html`<nav><a class="opcional" href="/#funcionalidades">Funcionalidades</a><a class="opcional" href="/#precos">Preço</a>
-          ${opcoes.portal ? html`<a class="opcional" href="${opcoes.portal}">Assinatura</a>` : ""}<a href="/entrar">Entrar</a>
+          ${opcoes.portal ? html`<a class="opcional" href="${opcoes.portal}">Assinatura</a>` : ""}${opcoes.naEntrada ? "" : html`<a href="/entrar">Entrar</a>`}
           ${opcoes.experimentar ? html`<a class="botao" href="/registar">Experimentar</a>` : ""}</nav>`}
   </div></header>
   <main class="${opcoes.estreito ? "estreito" : ""}">${corpo}</main>

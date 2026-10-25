@@ -143,7 +143,7 @@ export function paginaEntrar(opcoes: { enviado?: boolean; erro?: string; erroEnd
   if (opcoes.enviado) {
     return pagina("Entrar", html`<h1>Entrar no seu bookgest</h1>
       <p>✅ Se o email estiver associado a um bookgest, enviámos-lhe o link para entrar.</p>
-      <p class="nota">Não chegou? Veja a pasta de spam.</p>`, { estreito: true });
+      <p class="nota">Não chegou? Veja a pasta de spam.</p>`, { estreito: true, naEntrada: true });
   }
   return pagina("Entrar", html`<h1>Entrar no seu bookgest</h1>
     ${opcoes.erroEndereco ? html`<p class="erro">${opcoes.erroEndereco}</p>` : ""}
@@ -161,5 +161,5 @@ export function paginaEntrar(opcoes: { enviado?: boolean; erro?: string; erroEnd
         <label>Email <input type="email" name="email" required autocomplete="email"></label>
         <button type="submit">Enviar o link</button>
       </form>
-    </details>`, { estreito: true });
+    </details>`, { estreito: true, naEntrada: true });
 }
