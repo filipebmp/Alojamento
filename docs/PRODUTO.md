@@ -137,7 +137,8 @@ Passos de configuração em [PLATAFORMA.md](PLATAFORMA.md) (secção 8).
 
 ### Funcionalidades (a partir da análise dos concorrentes: stay'in, EazyAL, Hostkit)
 - [x] Importação de reservas pelos calendários iCal do Booking e do Airbnb (de hora a hora).
-- [ ] Completar nome, preço e hóspedes a partir dos emails de confirmação reencaminhados.
+- [x] Completar nome, preço e hóspedes a partir dos emails de confirmação reencaminhados
+  (reservas-<código>@bookgest.pt; a plataforma extrai os dados, não guarda o email e apaga-os após a entrega).
 - [ ] SIBA automático (ficheiro; Web Service a confirmar com siba@ssi.gov.pt).
 - [ ] Modelo 30 e resumo do IVA; faturação certificada (InvoiceXpress/Moloni) do gestor.
 - [ ] Página do hóspede em mais línguas, guia local, leitura do documento por fotografia.

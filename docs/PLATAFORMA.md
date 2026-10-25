@@ -132,3 +132,14 @@ openssl pkey -in bookgest-assinatura.pem -pubout -outform DER | tail -c 32 | bas
 ```bash
 sed -i 's#@plataforma path .*#@plataforma path /gestao /gestao/* /site.css /instalar /instalar/* /api/* /registar /registar/* /criar /assinar /obrigado /comprar /termos /entrar /stripe/*#' /opt/proxy/sites/bookgest.caddy && bash /opt/proxy/recarregar.sh
 ```
+
+## 9. Emails de reserva (reservas-<código>@bookgest.pt)
+
+1. Cloudflare → bookgest.pt → **Email → Email Routing → Enable**: o Cloudflare acrescenta os registos MX e SPF
+   do domínio principal (não mexem no `send.bookgest.pt` do Resend).
+2. **Destination addresses**: acrescentar e verificar o email pessoal para onde devem ir os outros emails do
+   domínio (ex.: `contacto@bookgest.pt`).
+3. **Routing rules → Catch-all address → Send to a Worker → `bookgest-plataforma`** → ativar.
+4. Em `plataforma/wrangler.toml`: `DOMINIO_EMAIL_RESERVAS = "bookgest.pt"` e `ENCAMINHAR_EMAILS = "<email verificado>"`.
+
+Cada instalação vê o seu endereço em Definições → Emails de reserva (depois de verificar a licença).
