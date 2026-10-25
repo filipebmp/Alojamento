@@ -8,7 +8,7 @@ dos hóspedes**.
 
 | Tema | Decisão |
 |---|---|
-| Onde ficam os dados | Na conta Cloudflare (gratuita) de cada gestor — "opção A" |
+| Onde ficam os dados | Dois modos: **Simples** (por omissão, alojado na conta do fornecedor, uma app e uma base por cliente; o fornecedor é subcontratante RGPD) e **Privado** (na conta Cloudflare do gestor, sem acesso do fornecedor) |
 | Preço | Por alojamento, por mês |
 | Código | Fechado (protegido por licença; publicado compactado) |
 
@@ -123,6 +123,17 @@ Plano original:
 - O instalador cria a conta de gestor (fecha a janela em que o assistente
   de primeiro arranque está aberto a quem chegar primeiro).
 - Atualização diária: verificar assinatura, aplicar migrações, publicar.
+
+### Modo Simples (alojado pelo bookgest)
+Passos de configuração em [PLATAFORMA.md](PLATAFORMA.md) (secção 8).
+- [x] Registo com confirmação de email e 30 dias grátis sem cartão (`/registar`, fechado até
+  `REGISTOS_ABERTOS = "sim"`); subscrição no fim do teste (`/assinar`) ligada à mesma licença.
+- [x] Criação automática da instalação na conta do fornecedor: app `bk-<nome>` e base D1 própria por cliente.
+- [x] Licenças compradas ou de cortesia sem instalação: escolher entre "Criar" (alojado) e "Instalar" (privado).
+- [x] Atualização central das instalações alojadas pela plataforma (de hora a hora, 5 por execução).
+- [x] Termos provisórios (`/termos`).
+- [ ] Contrato de subcontratação de dados e termos revistos por advogado.
+- [ ] Endereços `<nome>.bookgest.pt` (depois de o DNS do bookgest.pt passar para o Cloudflare).
 
 ### Fase 4 — Piloto
 - O fornecedor é o cliente n.º 1 (migra para este modelo).

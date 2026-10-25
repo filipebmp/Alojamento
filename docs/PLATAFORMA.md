@@ -114,7 +114,21 @@ openssl pkey -in bookgest-assinatura.pem -pubout -outform DER | tail -c 32 | bas
 
 - Endereço: `https://bookgest-plataforma.filipebmp.workers.dev/instalar` (depois do passo 5,
   `https://bookgest.pt/instalar`). O email da licença de cortesia já leva o link com a chave.
-- Enquanto o bookgest.pt passa pelo proxy Hetzner, acrescentar `/instalar` e `/api/*` às rotas da
-  plataforma no Caddy (`@plataforma path /gestao /gestao/* /site.css /instalar /instalar/* /api/*`).
+- Enquanto o bookgest.pt passa pelo proxy Hetzner, acrescentar as rotas da plataforma no Caddy (ver secção 8).
 - Antes do primeiro gestor: testar numa conta Cloudflare própria (cria um Worker e uma base `bookgest`,
   que se podem apagar depois).
+
+## 8. Modo Simples (instalações alojadas na conta do fornecedor)
+
+- Cada cliente tem uma app `bk-<nome>` e uma base D1 `bk-<nome>` na conta Cloudflare do fornecedor, em
+  `https://bk-<nome>.filipebmp.workers.dev`. A plataforma cria-as e atualiza-as com a chave da publicação
+  (`CLOUDFLARE_API_TOKEN`, enviada à plataforma como `CF_API_TOKEN`).
+- **Plano Workers Paid** (≈ 5 $/mês) na conta do fornecedor antes dos primeiros clientes: o plano gratuito só
+  permite 10 bases D1 e 100 Workers.
+- Abrir os registos: `REGISTOS_ABERTOS = "sim"` em `plataforma/wrangler.toml` (exige o Resend configurado).
+  Antes disso: termos e contrato de subcontratação de dados revistos (a página `/termos` é provisória).
+- Rotas da plataforma no Caddy, enquanto o bookgest.pt passa pelo servidor Hetzner:
+
+```bash
+sed -i 's#@plataforma path .*#@plataforma path /gestao /gestao/* /site.css /instalar /instalar/* /api/* /registar /registar/* /criar /assinar /obrigado /comprar /termos /stripe/*#' /opt/proxy/sites/bookgest.caddy && bash /opt/proxy/recarregar.sh
+```
