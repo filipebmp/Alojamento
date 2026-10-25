@@ -8,7 +8,11 @@
     "db:migrate:local": "wrangler d1 migrations apply alojamento --local -c app/wrangler.toml",
     "db:migrate:plataforma:local": "wrangler d1 migrations apply plataforma --local -c plataforma/wrangler.toml",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "gerar": "node scripts/gerar-estaticos.mjs",
+    "pretypecheck": "npm run gerar --silent",
+    "pretest": "npm run gerar --silent",
+    "predev": "npm run gerar --silent"
   },
   "dependencies": {
     "hono": "4.13.13"

@@ -5,7 +5,7 @@ import type { Fatura } from "./faturas";
 
 type Conteudo = HtmlEscapedString | Promise<HtmlEscapedString>;
 
-function pagina(titulo: string, corpo: Conteudo, opcoes: { gestao?: boolean; descricao?: string; portal?: string | null } = {}) {
+export function pagina(titulo: string, corpo: Conteudo, opcoes: { gestao?: boolean; descricao?: string; portal?: string | null } = {}) {
   return html`<!doctype html>
 <html lang="pt">
 <head>
@@ -157,7 +157,7 @@ export function paginaLicencas(
         const estado = estadoLicenca(l);
         const excede = l.alojamentos_ativos != null && l.alojamentos_ativos > l.alojamentos_pagos;
         return html`<tr>
-          <td><code>${l.chave}</code></td>
+          <td><code>${l.chave}</code>${l.url_instalacao ? html`<br><small><a href="${l.url_instalacao}" target="_blank" rel="noopener">instalação</a></small>` : ""}</td>
           <td>${c?.nome ?? ""}${c?.email ? html`<br><small>${c.email}</small>` : ""}${l.notas ? html`<br><small>${l.notas}</small>` : ""}</td>
           <td>${l.tipo}</td>
           <td class="${estado === "ativa" ? "" : "erro"}">${NOMES_ESTADO[estado]}</td>

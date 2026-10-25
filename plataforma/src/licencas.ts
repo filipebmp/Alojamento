@@ -15,6 +15,8 @@ export interface Licenca {
   versao: string | null;
   alojamentos_ativos: number | null;
   ultima_comunicacao: string | null;
+  url_instalacao: string | null;
+  instalada_em: string | null;
   criado_em: string;
   atualizado_em: string;
 }

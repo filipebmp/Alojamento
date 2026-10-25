@@ -14,6 +14,7 @@ export type EstadoLicenca = "ativa" | "pagamento_em_atraso" | "inativa" | "desco
 export interface RespostaLicenca {
   estado: EstadoLicenca;
   alojamentosPagos: number;
+  versaoAtual?: string | null; // versão mais recente publicada (atualização automática)
 }
 
 export function pedidoValido(p: unknown): p is PedidoLicenca {

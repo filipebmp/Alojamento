@@ -45,20 +45,21 @@ export async function hashEmail(email: string): Promise<string> {
 }
 
 // Licença de cortesia (piloto): a chave e os próximos passos. Respostas vão para o contacto do site.
-export function emailLicencaCortesia(d: { chave: string; nome: string | null; alojamentos: number }) {
+export function emailLicencaCortesia(d: { chave: string; nome: string | null; alojamentos: number; linkInstalar: string }) {
   const ola = d.nome ? `Olá ${d.nome},` : "Olá,";
   const texto =
     `${ola}\n\nOfereceram-lhe uma licença do bookgest para ${d.alojamentos} alojamento(s), sem custos.\n\n` +
     `A sua chave de licença: ${d.chave}\n\n` +
-    "O bookgest fica instalado numa conta Cloudflare gratuita em seu nome: os dados dos seus hóspedes ficam só consigo. " +
-    "Vamos ajudá-lo a fazer a instalação; depois, cole a chave no painel, em Definições → Licença.\n\n" +
+    "O bookgest fica instalado numa conta Cloudflare gratuita em seu nome: os dados dos seus hóspedes ficam só consigo.\n\n" +
+    `Para instalar (cerca de 10 minutos), siga os passos em:\n${d.linkInstalar}\n\n` +
     "Responda a este email se tiver alguma dúvida.";
   const html = `<p>${escapar(ola)}</p>
 <p>Ofereceram-lhe uma licença do <strong>bookgest</strong> para ${d.alojamentos} alojamento(s), sem custos.</p>
 <p>A sua chave de licença:</p>
 <p style="font:600 20px ui-monospace,monospace;letter-spacing:.05em;padding:12px;border:2px dashed #0f5c4d;border-radius:8px;text-align:center">${escapar(d.chave)}</p>
-<p>O bookgest fica instalado numa conta Cloudflare gratuita em seu nome: os dados dos seus hóspedes ficam só consigo.
-Vamos ajudá-lo a fazer a instalação; depois, cole a chave no painel, em <em>Definições → Licença</em>.</p>
+<p>O bookgest fica instalado numa conta Cloudflare gratuita em seu nome: os dados dos seus hóspedes ficam só consigo.</p>
+<p><a href="${escapar(d.linkInstalar)}" style="display:inline-block;padding:10px 16px;background:#0f5c4d;color:#fff;border-radius:8px;text-decoration:none;font-weight:600">Instalar o bookgest</a></p>
+<p style="color:#5d6964">Demora cerca de 10 minutos, com instruções passo a passo.</p>
 <p style="color:#5d6964">Responda a este email se tiver alguma dúvida.</p>`;
   return { assunto: "A sua licença do bookgest", texto, html };
 }

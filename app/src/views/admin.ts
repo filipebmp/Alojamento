@@ -322,16 +322,17 @@ function camposNovaSenha() {
     <label>Repetir <input type="password" name="confirmar" required minlength="${SENHA_MINIMA}" autocomplete="new-password"></label>`;
 }
 
-export function paginaConfigurar(erro?: string) {
+export function paginaConfigurar(erro?: string, codigo?: string, bloqueado = false) {
   return pagina("Bem-vindo", html`<h1>Bem-vindo ao bookgest</h1>
-    <p>Crie a sua conta de gestor. A seguir, crie o seu primeiro alojamento.</p>
+    ${bloqueado ? "" : html`<p>Crie a sua conta de gestor. A seguir, crie o seu primeiro alojamento.</p>`}
     ${erro ? html`<p class="erro">${erro}</p>` : ""}
-    <form method="post" action="/configurar">
+    ${bloqueado ? "" : html`<form method="post" action="/configurar">
+      ${codigo ? html`<input type="hidden" name="t" value="${codigo}">` : ""}
       <label>Nome <input name="nome" autocomplete="name"></label>
       <label>Email <input type="email" name="email" required autocomplete="username"></label>
       ${camposNovaSenha()}
       <button type="submit">Continuar</button>
-    </form>`);
+    </form>`}`);
 }
 
 export function paginaCodigos(codigos: string[], opcoes: { primeiraVez: boolean }) {
@@ -469,10 +470,20 @@ export function paginaUtilizadores(lista: Utilizador[], meuId: number, opcoes: {
 
 const NOMES_ESTADO_LICENCA = { ativa: "ativa", pagamento_em_atraso: "pagamento em atraso", inativa: "inativa", desconhecida: "não reconhecida" };
 
+export function paginaReservasBloqueadas(papel: Papel) {
+  return pagina("Reservas suspensas", html`<h1>Reservas novas suspensas</h1>
+    <p>A licença do bookgest está inativa (ou há mais alojamentos ativos do que os incluídos) há mais de 14 dias.
+      As reservas existentes, os links de check-in já enviados e todos os dados continuam disponíveis.</p>
+    ${papel === "gestor" ? html`<p><a class="botao" href="/admin/definicoes">Ver a licença</a></p>` : html`<p>Fale com o gestor.</p>`}`,
+  { admin: papel === "gestor" ? true : "equipa" });
+}
+
 export function paginaDefinicoes(opcoes: {
   erro?: string;
   licenca: { chave: string | null; estado: EstadoGuardado | null; erro: string | null; aviso: string | null };
+  versao: { atual: string; automatica: boolean; ultima: { em: string; versao: string; erro?: string } | null };
 }) {
+  const v = opcoes.versao;
   const { chave, estado, erro, aviso } = opcoes.licenca;
   return pagina("Definições", html`<h1>Definições</h1>
     ${opcoes.erro ? html`<p class="erro">${opcoes.erro}</p>` : ""}
@@ -493,6 +504,16 @@ export function paginaDefinicoes(opcoes: {
         <button type="submit">Guardar e verificar</button>
       </form>
       <p class="nota">A sua instalação só envia ao bookgest a chave, a versão e o número de alojamentos ativos.</p>
+    </section>
+    <section class="cartao">
+      <h2>Versão</h2>
+      <p>bookgest ${v.atual} · ${v.automatica ? "atualizações automáticas (todos os dias)" : "atualizada pelo fornecedor"}</p>
+      ${v.ultima
+        ? html`<p class="${v.ultima.erro ? "erro" : "nota"}">${v.ultima.erro
+            ? `A atualização para a ${v.ultima.versao} falhou em ${dataPt(v.ultima.em)}: ${v.ultima.erro}`
+            : `Atualizada para a ${v.ultima.versao} em ${dataPt(v.ultima.em)}.`}</p>`
+        : ""}
+      ${v.automatica ? html`<form method="post" action="/admin/definicoes/atualizar"><button>Procurar atualizações agora</button></form>` : ""}
     </section>`, { admin: true });
 }
 

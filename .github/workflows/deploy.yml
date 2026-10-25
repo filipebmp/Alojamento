@@ -43,3 +43,10 @@ jobs:
         run: >-
           node ../scripts/publicar.mjs plataforma ADMIN_PASSWORD=PLATAFORMA_ADMIN_PASSWORD
           STRIPE_SECRET_KEY STRIPE_WEBHOOK_SECRET INVOICEXPRESS_API_KEY RESEND_API_KEY
+
+      - name: Publicar a versão para as instalações dos gestores (assinada)
+        env:
+          BOOKGEST_CHAVE_ASSINATURA: ${{ secrets.BOOKGEST_CHAVE_ASSINATURA }}
+        run: |
+          npx wrangler deploy --dry-run --outdir "$PWD/dist/app" -c app/wrangler.toml > /dev/null
+          node scripts/publicar-versao.mjs dist/app/index.js

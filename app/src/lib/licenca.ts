@@ -63,3 +63,19 @@ export async function pedirEmailRecuperacao(urlBase: string, pedido: PedidoEmail
     throw new Error(erro ?? `A plataforma respondeu ${res.status}`);
   }
 }
+
+// Com a licença inativa, desconhecida ou alojamentos a mais durante este período, deixa de ser possível
+// criar reservas novas. Nunca se bloqueia o acesso aos dados nem as reservas existentes.
+export const DIAS_TOLERANCIA = 14;
+
+export function dataBloqueio(problemaDesde: string): Date {
+  return new Date(Date.parse(problemaDesde) + DIAS_TOLERANCIA * 86_400_000);
+}
+
+export function reservasBloqueadas(problemaDesde: string | null, agora: Date): boolean {
+  return !!problemaDesde && agora >= dataBloqueio(problemaDesde);
+}
+
+export function haProblema(r: Pick<RespostaLicenca, "estado" | "alojamentosPagos">, ativos: number): boolean {
+  return r.estado !== "ativa" || ativos > r.alojamentosPagos;
+}

@@ -8,6 +8,9 @@ import {
   pedidoValido,
 } from "../../comum/licenca";
 import { iguais } from "../../comum/senha";
+import { ErroCloudflare } from "../../comum/cloudflare";
+import { CAMINHO_API_VERSOES, CHAVE_PUBLICA_VERSOES, type Versao, type VersaoAssinada, assinaturaConfere, compararVersoes } from "../../comum/versoes";
+import { instalar } from "./instalador";
 import { type ConfigEmail, emailLicencaCortesia, emailRecuperacao, enviarEmail, hashEmail } from "./email";
 import { type ConfigInvoiceXpress, type Fatura, emitirFatura, registarFatura } from "./faturas";
 import {
@@ -23,6 +26,7 @@ import {
   registarComunicacao,
 } from "./licencas";
 import { type CheckoutSession, type Evento, type Invoice, type Price, type Subscription, assinaturaValida, stripe } from "./stripe";
+import { paginaInstalado, paginaInstalar, paginaInstalarCloudflare } from "./views-instalar";
 import { paginaEntrar, paginaFaturas, paginaInicio, paginaLicencas, paginaMensagem, paginaObrigado } from "./views";
 
 type Env = {
@@ -41,6 +45,7 @@ type Env = {
   RESEND_API_KEY?: string;
   EMAIL_REMETENTE?: string; // ex.: "bookgest <nao-responder@bookgest.pt>"
   RESEND_URL?: string; // só para testes locais
+  CF_API_URL?: string; // só para testes locais (API do Cloudflare simulada)
   // Endereço da instalação que servia o bookgest.pt antes da plataforma: os links já enviados a hóspedes continuam a funcionar.
   INSTALACAO_ANTIGA?: string;
 };
@@ -183,7 +188,92 @@ app.post(CAMINHO_API_LICENCA, async (c) => {
   const licenca = await obterLicencaPorChave(c.env.DB, pedido.chave);
   if (!licenca) return c.json<RespostaLicenca>({ estado: "desconhecida", alojamentosPagos: 0 });
   await registarComunicacao(c.env.DB, licenca.id, pedido.versao, pedido.alojamentos);
-  return c.json<RespostaLicenca>({ estado: estadoLicenca(licenca), alojamentosPagos: licenca.alojamentos_pagos });
+  return c.json<RespostaLicenca>({
+    estado: estadoLicenca(licenca),
+    alojamentosPagos: licenca.alojamentos_pagos,
+    versaoAtual: await versaoMaisRecente(c.env.DB),
+  });
+});
+
+// ---------- Versões da app (publicadas pelo GitHub Actions, assinadas) ----------
+
+async function versaoMaisRecente(db: D1Database): Promise<string | null> {
+  const vs = (await db.prepare("SELECT versao FROM versoes").all<{ versao: string }>()).results.map((r) => r.versao);
+  return vs.sort(compararVersoes).at(-1) ?? null;
+}
+
+async function obterVersao(db: D1Database, versao: string): Promise<VersaoAssinada | null> {
+  return db.prepare("SELECT payload, assinatura FROM versoes WHERE versao = ?").bind(versao).first<VersaoAssinada>();
+}
+
+// Não precisa de outra autenticação: só aceita versões assinadas com a chave privada do GitHub.
+app.post(CAMINHO_API_VERSOES, async (c) => {
+  if (!CHAVE_PUBLICA_VERSOES) return c.json({ erro: "Chave pública das versões por definir" }, 503);
+  const v = await c.req.json<VersaoAssinada>().catch(() => null);
+  if (typeof v?.payload !== "string" || typeof v.assinatura !== "string" || !(await assinaturaConfere(v.payload, v.assinatura, CHAVE_PUBLICA_VERSOES))) {
+    return c.json({ erro: "Assinatura inválida" }, 403);
+  }
+  const versao = (JSON.parse(v.payload) as Versao).versao;
+  if (!/^\d+\.\d+\.\d+$/.test(versao)) return c.json({ erro: "Versão inválida" }, 400);
+  const existente = await obterVersao(c.env.DB, versao);
+  if (existente) {
+    return existente.payload === v.payload
+      ? c.json({ estado: "ja_publicada", versao })
+      : c.json({ erro: `A versão ${versao} já foi publicada com outro conteúdo: aumente VERSAO em app/src/versao.ts` }, 409);
+  }
+  await c.env.DB.prepare("INSERT INTO versoes (versao, payload, assinatura, publicada_em) VALUES (?, ?, ?, ?)")
+    .bind(versao, v.payload, v.assinatura, new Date().toISOString())
+    .run();
+  return c.json({ estado: "publicada", versao }, 201);
+});
+
+app.get(`${CAMINHO_API_VERSOES}/:versao{\\d+\\.\\d+\\.\\d+}`, async (c) => {
+  const v = await obterVersao(c.env.DB, c.req.param("versao"));
+  return v ? c.json(v) : c.json({ erro: "Versão desconhecida" }, 404);
+});
+
+// ---------- Instalador (na conta Cloudflare do gestor) ----------
+
+async function licencaParaInstalar(db: D1Database, chave: string | undefined): Promise<Licenca | string> {
+  const l = chave ? await obterLicencaPorChave(db, chave.trim().toUpperCase()) : null;
+  if (!l) return "Chave de licença desconhecida. Confirme-a no email que recebeu.";
+  if (estadoLicenca(l) !== "ativa") return "Esta licença não está ativa.";
+  return l;
+}
+
+app.get("/instalar", (c) => c.html(paginaInstalar(c.req.query("chave") ?? "")));
+
+app.post("/instalar", async (c) => {
+  const { chave } = await c.req.parseBody<{ chave: string }>();
+  const l = await licencaParaInstalar(c.env.DB, chave);
+  if (typeof l === "string") return c.html(paginaInstalar(chave ?? "", l), 400);
+  return c.html(paginaInstalarCloudflare(l.chave));
+});
+
+app.post("/instalar/concluir", async (c) => {
+  const { chave, token } = await c.req.parseBody<{ chave: string; token: string }>();
+  const l = await licencaParaInstalar(c.env.DB, chave);
+  if (typeof l === "string") return c.html(paginaInstalar(chave ?? "", l), 400);
+  const t = String(token ?? "").trim();
+  if (!/^[A-Za-z0-9_-]{30,}$/.test(t)) return c.html(paginaInstalarCloudflare(l.chave, "A chave de API não parece correta: copie-a de novo do Cloudflare."), 400);
+  const atual = await versaoMaisRecente(c.env.DB);
+  const assinada = atual ? await obterVersao(c.env.DB, atual) : null;
+  if (!assinada) return c.html(paginaInstalarCloudflare(l.chave, "Ainda não há nenhuma versão publicada para instalar. Contacte-nos."), 503);
+  try {
+    const r = await instalar(t, {
+      versao: JSON.parse(assinada.payload) as Versao,
+      chaveLicenca: l.chave,
+      urlLicencas: urlBase(c),
+      apiCloudflare: c.env.CF_API_URL || undefined,
+    });
+    await c.env.DB.prepare("UPDATE licencas SET url_instalacao = ?, instalada_em = ? WHERE id = ?").bind(r.url, new Date().toISOString(), l.id).run();
+    return c.html(paginaInstalado(r));
+  } catch (e) {
+    // Nunca registar a chave de API do gestor: só a mensagem do Cloudflare.
+    const msg = e instanceof ErroCloudflare ? e.message : "erro inesperado";
+    console.error("Instalação falhou:", msg);
+    return c.html(paginaInstalarCloudflare(l.chave, `O Cloudflare recusou um passo da instalação: ${msg}`), 502);
+  }
 });
 
 // ---------- Email de recuperação (pedido por uma instalação) ----------
@@ -308,7 +398,7 @@ app.get("/gestao", async (c) => {
 });
 
 // Envia a chave de uma cortesia ao cliente. Devolve o parâmetro a pôr no endereço da página.
-async function enviarChaveCortesia(env: Env, licencaId: number): Promise<string> {
+async function enviarChaveCortesia(env: Env, licencaId: number, base: string): Promise<string> {
   const cfg = configEmail(env);
   if (!cfg) return "email=" + encodeURIComponent("Resend não configurado");
   const l = await env.DB.prepare(
@@ -321,7 +411,12 @@ async function enviarChaveCortesia(env: Env, licencaId: number): Promise<string>
     await enviarEmail(cfg, {
       para: l.email,
       responderPara: env.CONTACTO || null,
-      ...emailLicencaCortesia({ chave: l.chave, nome: l.nome, alojamentos: l.alojamentos_pagos }),
+      ...emailLicencaCortesia({
+        chave: l.chave,
+        nome: l.nome,
+        alojamentos: l.alojamentos_pagos,
+        linkInstalar: `${base}/instalar?chave=${encodeURIComponent(l.chave)}`,
+      }),
     });
     return `email=enviado&para=${encodeURIComponent(l.email)}`;
   } catch (e) {
@@ -338,13 +433,13 @@ app.post("/gestao/licencas", async (c) => {
   if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return c.text("Email inválido.", 400);
   const nome = b.nome?.trim() || null;
   const id = await criarCortesia(c.env.DB, n, b.notas?.trim() || null, email ? { email, nome } : null);
-  const envio = email && b.enviar ? `&${await enviarChaveCortesia(c.env, id)}` : "";
+  const envio = email && b.enviar ? `&${await enviarChaveCortesia(c.env, id, urlBase(c))}` : "";
   // Redireciona: atualizar a página não volta a submeter o formulário (nem cria outra licença).
   return c.redirect(`/gestao?nova=${id}${envio}`);
 });
 
 app.post("/gestao/licencas/:id/enviar", async (c) => {
-  return c.redirect(`/gestao?${await enviarChaveCortesia(c.env, Number(c.req.param("id")))}`);
+  return c.redirect(`/gestao?${await enviarChaveCortesia(c.env, Number(c.req.param("id")), urlBase(c))}`);
 });
 
 // Só cortesias que nunca foram usadas por uma instalação (ex.: criadas por engano).

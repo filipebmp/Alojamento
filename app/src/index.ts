@@ -18,7 +18,18 @@ import {
 } from "./db";
 import { configAlojamento, regrasTmt } from "./lib/concelhos";
 import { hojeLisboa } from "./lib/datas";
-import { type EstadoGuardado, URL_LICENCAS_PREDEFINIDO, avisoLicenca, consultarLicenca, pedirEmailRecuperacao } from "./lib/licenca";
+import { compararVersoes } from "../../comum/versoes";
+import { atualizar } from "./lib/atualizacao";
+import {
+  type EstadoGuardado,
+  URL_LICENCAS_PREDEFINIDO,
+  avisoLicenca,
+  consultarLicenca,
+  dataBloqueio,
+  haProblema,
+  pedirEmailRecuperacao,
+  reservasBloqueadas,
+} from "./lib/licenca";
 import { estadoCodigo, mesesAteAnterior, ordenarPendentes, pendentesReserva, pendentesTmt } from "./lib/regras";
 import { SENHA_MINIMA, iguais, verificarSenha } from "../../comum/senha";
 import { calcularTmt, cobraTmt } from "./lib/tmt";
@@ -57,11 +68,13 @@ import {
   paginaPainel,
   paginaRecuperar,
   paginaReserva,
+  paginaReservasBloqueadas,
   paginaSemAcesso,
   paginaTmt,
   paginaUtilizadores,
 } from "./views/admin";
 import { paginaHospede } from "./views/hospede";
+import { ESTATICOS } from "./estaticos.gerado";
 import { VERSAO } from "./versao";
 
 type Env = {
@@ -73,6 +86,11 @@ type Env = {
   URL_PUBLICO?: string;
   URL_LICENCAS?: string; // servidor de licenças (predefinido: https://bookgest.pt)
   PLATAFORMA?: Fetcher; // ligação direta à plataforma, só na instalação do fornecedor (mesma conta Cloudflare)
+  // Só nas instalações feitas pelo instalador: permitem a atualização automática.
+  CF_API_TOKEN?: string;
+  CF_CONTA?: string;
+  CF_SCRIPT?: string;
+  CF_API_URL?: string; // só para testes locais
 };
 
 type Variaveis = { utilizador: Utilizador };
@@ -82,6 +100,13 @@ const COOKIE = "sessao";
 const MAX_IMAGEM = 1_500_000;
 
 const app = new Hono<{ Bindings: Env; Variables: Variaveis }>();
+
+// Ficheiros estáticos (estilo, ícone, manifest, service worker), embutidos no código.
+app.get("/:ficheiro{[a-z.]+\\.(css|svg|webmanifest|js)}", (c, next) => {
+  const f = ESTATICOS[`/${c.req.param("ficheiro")}`];
+  if (!f) return next();
+  return c.body(f.conteudo, 200, { "Content-Type": f.tipo, "Cache-Control": "public, max-age=3600" });
+});
 
 app.use("*", async (c, next) => {
   await prepararInstalacao(c.env.DB, c.env.CODIGO_CHAVES);
@@ -163,15 +188,33 @@ app.post("/logout", (c) => {
 });
 
 // Assistente de primeiro arranque: só numa instalação sem utilizadores nem palavra-passe anterior.
-app.get("/configurar", async (c) => ((await estadoAcesso(c)) === "nova" ? c.html(paginaConfigurar()) : c.redirect("/login")));
+// Instalações feitas pelo instalador: o assistente só abre com o código de uso único do link final da instalação
+// (fecha a janela em que quem abrisse o endereço primeiro ficaria com a instalação).
+async function codigoConfiguracaoValido(c: Ctx, t: string | undefined): Promise<boolean> {
+  const guardado = await lerDefinicao(c.env.DB, "token_configuracao");
+  if (!guardado) return true;
+  if (!t) return false;
+  const d = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(t)));
+  return iguais(new TextEncoder().encode([...d].map((b) => b.toString(16).padStart(2, "0")).join("")), new TextEncoder().encode(guardado));
+}
+
+const SEM_CODIGO = "Abra o link «Criar a minha conta» mostrado no fim da instalação.";
+
+app.get("/configurar", async (c) => {
+  if ((await estadoAcesso(c)) !== "nova") return c.redirect("/login");
+  const t = c.req.query("t");
+  return (await codigoConfiguracaoValido(c, t)) ? c.html(paginaConfigurar(undefined, t)) : c.html(paginaConfigurar(SEM_CODIGO, undefined, true), 403);
+});
 
 app.post("/configurar", async (c) => {
   if ((await estadoAcesso(c)) !== "nova") return c.redirect("/login");
   const b = await c.req.parseBody<Record<string, string>>();
+  if (!(await codigoConfiguracaoValido(c, b.t))) return c.html(paginaConfigurar(SEM_CODIGO, undefined, true), 403);
   const email = emailValido(b.email);
-  if (!email) return c.html(paginaConfigurar("Indique um email válido."), 400);
+  if (!email) return c.html(paginaConfigurar("Indique um email válido.", b.t), 400);
   const erro = validarNovaSenha(b.senha, b.confirmar);
-  if (erro) return c.html(paginaConfigurar(erro), 400);
+  if (erro) return c.html(paginaConfigurar(erro, b.t), 400);
+  await c.env.DB.prepare("DELETE FROM definicoes WHERE chave = 'token_configuracao'").run();
   const id = await criarUtilizador(c.env.DB, { email, nome: b.nome?.trim() || null, senha: b.senha, papel: "gestor" });
   const u = (await obterUtilizador(c.env.DB, id))!;
   await abrirSessao(c, u);
@@ -313,17 +356,24 @@ app.get("/admin", async (c) => {
   ];
   // A equipa só vê o que depende dela: formulários e dados de hóspedes por preencher.
   const pendentes = p === "gestor" ? todos : todos.filter((x) => x.tipo === "formulario" || x.tipo === "dados_hospedes");
-  const aviso = p === "gestor" ? avisoLicenca(licenca.chave, licenca.estado, alojamentos.filter((a) => a.ativo).length, agora) : null;
+  const avisoBase = p === "gestor" ? avisoLicenca(licenca.chave, licenca.estado, alojamentos.filter((a) => a.ativo).length, agora) : null;
+  const aviso = avisoBase && licenca.problemaDesde
+    ? `${avisoBase} ${reservasBloqueadas(licenca.problemaDesde, agora) ? "Já não é possível criar reservas novas." : `A partir de ${dataBloqueio(licenca.problemaDesde).toLocaleDateString("pt-PT", { timeZone: "Europe/Lisbon" })} deixa de ser possível criar reservas novas.`}`
+    : avisoBase;
   return c.html(paginaPainel(ordenarPendentes(pendentes), reservas, mapa, agora, aviso, p));
 });
 
 app.get("/admin/reservas/nova", async (c) => {
+  const bloqueio = await bloqueioReservas(c);
+  if (bloqueio) return bloqueio;
   const ativos = (await listarAlojamentos(c.env.DB)).filter((a) => a.ativo);
   if (!ativos.length) return papel(c) === "gestor" ? c.redirect("/admin/alojamentos/novo") : c.html(paginaSemAcesso());
   return c.html(paginaNovaReserva(ativos, papel(c)));
 });
 
 app.post("/admin/reservas", async (c) => {
+  const bloqueio = await bloqueioReservas(c);
+  if (bloqueio) return bloqueio;
   const b = await c.req.parseBody<Record<string, string>>();
   const checkin = data(b.checkin);
   const checkout = data(b.checkout);
@@ -593,12 +643,22 @@ async function mostrarDefinicoes(c: Ctx, opcoes: { erro?: string; guardado?: boo
   const licenca = await lerLicenca(c.env.DB);
   const ativos = (await listarAlojamentos(c.env.DB)).filter((a) => a.ativo).length;
   return c.html(
-    paginaDefinicoes({ ...opcoes, licenca: { ...licenca, aviso: avisoLicenca(licenca.chave, licenca.estado, ativos, new Date()) } }),
+    paginaDefinicoes({
+      ...opcoes,
+      licenca: { ...licenca, aviso: avisoLicenca(licenca.chave, licenca.estado, ativos, new Date()) },
+      versao: { atual: VERSAO, automatica: !!c.env.CF_API_TOKEN, ultima: licenca.atualizacao },
+    }),
     opcoes.erro ? 400 : 200,
   );
 }
 
 app.get("/admin/definicoes", (c) => mostrarDefinicoes(c));
+
+// Verifica a licença e, havendo versão nova, atualiza já (em vez de esperar pelo dia seguinte).
+app.post("/admin/definicoes/atualizar", async (c) => {
+  await verificarLicenca(c.env);
+  return c.redirect("/admin/definicoes");
+});
 
 // ---------- A minha conta (todos os utilizadores) ----------
 
@@ -720,13 +780,27 @@ app.post("/admin/definicoes/licenca", async (c) => {
 
 // ---------- Licença ----------
 
-async function lerLicenca(db: D1Database): Promise<{ chave: string | null; estado: EstadoGuardado | null; erro: string | null }> {
-  const [chave, estado, erro] = await Promise.all([
+async function lerLicenca(db: D1Database) {
+  const [chave, estado, erro, problemaDesde, atualizacao] = await Promise.all([
     lerDefinicao(db, "licenca_chave"),
     lerDefinicao(db, "licenca_estado"),
     lerDefinicao(db, "licenca_erro"),
+    lerDefinicao(db, "licenca_problema_desde"),
+    lerDefinicao(db, "atualizacao"),
   ]);
-  return { chave, estado: estado ? (JSON.parse(estado) as EstadoGuardado) : null, erro };
+  return {
+    chave,
+    estado: estado ? (JSON.parse(estado) as EstadoGuardado) : null,
+    erro,
+    problemaDesde,
+    atualizacao: atualizacao ? (JSON.parse(atualizacao) as EstadoAtualizacao) : null,
+  };
+}
+
+export interface EstadoAtualizacao {
+  em: string;
+  versao: string; // versão aplicada ou tentada
+  erro?: string;
 }
 
 // Corre uma vez por dia (cron) e ao guardar a chave. Sem resposta, mantém o último estado conhecido.
@@ -739,10 +813,40 @@ async function verificarLicenca(env: Env): Promise<void> {
     const guardado: EstadoGuardado = { estado: r.estado, alojamentosPagos: r.alojamentosPagos, verificadoEm: new Date().toISOString() };
     await gravarDefinicao(env.DB, "licenca_estado", JSON.stringify(guardado));
     await env.DB.prepare("DELETE FROM definicoes WHERE chave = 'licenca_erro'").run();
+    // Conta desde quando há um problema (licença ou alojamentos a mais), para o bloqueio de novas reservas.
+    if (haProblema(r, alojamentos)) await definicaoInicial(env.DB, "licenca_problema_desde", new Date().toISOString());
+    else await env.DB.prepare("DELETE FROM definicoes WHERE chave = 'licenca_problema_desde'").run();
+    if (r.versaoAtual && compararVersoes(r.versaoAtual, VERSAO) > 0) await atualizarInstalacao(env, r.versaoAtual);
   } catch (e) {
     console.error("Verificação da licença falhou", e);
     await gravarDefinicao(env.DB, "licenca_erro", String(e).slice(0, 300));
   }
+}
+
+async function atualizarInstalacao(env: Env, alvo: string): Promise<void> {
+  if (!env.CF_API_TOKEN || !env.CF_CONTA || !env.CF_SCRIPT) return; // instalação publicada pelo GitHub (a do fornecedor)
+  const estado: EstadoAtualizacao = { em: new Date().toISOString(), versao: alvo };
+  try {
+    await atualizar(env.DB, {
+      token: env.CF_API_TOKEN,
+      conta: env.CF_CONTA,
+      script: env.CF_SCRIPT,
+      urlPlataforma: env.URL_LICENCAS || URL_LICENCAS_PREDEFINIDO,
+      servico: env.PLATAFORMA,
+      apiCloudflare: env.CF_API_URL || undefined,
+    }, alvo, VERSAO);
+  } catch (e) {
+    console.error("Atualização falhou", e);
+    estado.erro = String(e instanceof Error ? e.message : e).slice(0, 300);
+  }
+  await gravarDefinicao(env.DB, "atualizacao", JSON.stringify(estado));
+}
+
+// Página mostrada em vez do formulário de reserva quando o período de tolerância da licença terminou.
+async function bloqueioReservas(c: Ctx): Promise<Response | null> {
+  const desde = await lerDefinicao(c.env.DB, "licenca_problema_desde");
+  if (!reservasBloqueadas(desde, new Date())) return null;
+  return c.html(paginaReservasBloqueadas(papel(c)), 403);
 }
 
 // ---------- Página do hóspede ----------
