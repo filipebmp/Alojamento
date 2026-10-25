@@ -1,11 +1,11 @@
 import { html } from "hono/html";
 import type { ReservaCompleta } from "../db";
 import { hojeLisboa } from "../lib/datas";
-import { CONCELHOS, regrasTmt } from "../lib/concelhos";
+import { CONCELHOS, IVA_REGIAO, regrasTmt } from "../lib/concelhos";
 import type { EstadoGuardado } from "../lib/licenca";
 import { type Pendente, eEstrangeiro, euros, hospedeCompleto, prazosTmt } from "../lib/regras";
 import { SENHA_MINIMA } from "../../../comum/senha";
-import { calcularTmt, cobraTmt } from "../lib/tmt";
+import { calcularTmt, cobraTmt, descreverTmt, temEpocas } from "../lib/tmt";
 import type { Alojamento, DeclaracaoTmt, Passo } from "../lib/tipos";
 import { type Calendario, NOMES_PLATAFORMA } from "../lib/importacao";
 import type { EmailRecebido } from "../lib/emails";
@@ -294,9 +294,9 @@ export function paginaReserva(
     ${cobraTmt(regras)
       ? html`<section class="cartao" id="tmt">
       <h2>Taxa turística</h2>
-      <p>Devida: <strong>${euros(tmt.valorCents)}</strong> (${tmt.hospedesTributaveis} hóspede(s) × ${tmt.noites} noite(s) × ${euros(regras.valorPorNoiteCents)})<br>
+      <p>Devida: <strong>${euros(tmt.valorCents)}</strong> (${tmt.hospedesTributaveis} hóspede(s) × ${tmt.noites} noite(s); ${descreverTmt(regras)})<br>
         Dormidas: ${tmt.dormidasTotais} totais · ${tmt.dormidasTributaveis} tributáveis ·
-        ${regras.maxNoites ? html`${tmt.dormidasAcimaLimite} não sujeitas (além de ${regras.maxNoites} noites) · ` : ""}${tmt.dormidasMenores} isentas (menores)
+        ${tmt.dormidasAcimaLimite ? html`${tmt.dormidasAcimaLimite} não sujeitas (além do limite de noites ou fora da época) · ` : ""}${tmt.dormidasMenores} isentas (menores)
         ${hospedes.length < r.n_hospedes ? html`<br><small>Provisório: faltam hóspedes.</small>` : ""}</p>
       <p>Cobrada pela plataforma: ${r.tmt_cobrada_cents == null ? "—" : euros(r.tmt_cobrada_cents)}</p>
     </section>`
@@ -348,7 +348,7 @@ export function paginaTmt(porAlojamento: TmtAlojamento[], mostrarNome: boolean) 
       const regras = regrasTmt(a);
       return html`
       ${mostrarNome ? html`<h2>${a.nome}</h2>` : ""}
-      <p class="nota">CM ${a.concelho}: ${euros(regras.valorPorNoiteCents)} por hóspede e noite${regras.maxNoites ? `, máx. ${regras.maxNoites} noites` : ""}.
+      <p class="nota">CM ${a.concelho}: ${descreverTmt(regras)}.
         ${a.tmt_portal ? html`<a href="${a.tmt_portal}" target="_blank" rel="noopener">Portal da câmara</a>` : ""}</p>
       ${resumos.map(({ mes, hospedes, dormidasTotais, dormidas, dormidasAcimaLimite, dormidasMenores, valorCents, semDados, declaracao: d }) => {
         const prazos = prazosTmt(mes, regras);
@@ -357,7 +357,7 @@ export function paginaTmt(porAlojamento: TmtAlojamento[], mostrarNome: boolean) 
           <dl><dt>Hóspedes tributáveis</dt><dd>${hospedes}</dd>
             <dt>Dormidas totais</dt><dd>${dormidasTotais}</dd>
             <dt>Dormidas tributáveis</dt><dd>${dormidas}</dd>
-            ${regras.maxNoites ? html`<dt>Não sujeitas (além de ${regras.maxNoites} noites)</dt><dd>${dormidasAcimaLimite}</dd>` : ""}
+            ${regras.maxNoites || temEpocas(regras) ? html`<dt>Não sujeitas (além do limite de noites ou fora da época)</dt><dd>${dormidasAcimaLimite}</dd>` : ""}
             <dt>Isentas (menores de ${regras.idadeMinima})</dt><dd>${dormidasMenores}</dd>
             <dt>Valor</dt><dd><strong>${euros(valorCents)}</strong></dd></dl>
           ${semDados ? html`<p class="erro">⚠️ ${semDados} reserva(s) sem todos os hóspedes registados: valores incompletos.</p>` : ""}
@@ -664,25 +664,39 @@ export function paginaAlojamentos(alojamentos: Alojamento[], opcoes: { limite?: 
 }
 
 // Preenche os campos da taxa turística a partir do concelho escolhido.
+// Ao escolher o concelho, preenche a taxa turística (valores de referência) e o IVA da região.
 const SCRIPT_CONCELHO = html`<script>
-document.querySelector("select[data-concelhos]")?.addEventListener("change", (e) => {
-  const lista = JSON.parse(e.target.dataset.concelhos);
-  const c = lista.find((x) => x.nome === e.target.value);
-  const f = e.target.form;
-  if (e.target.value === "") return;
-  if (e.target.value === "-") {
-    f.concelho.value = ""; f.tmt_valor.value = ""; f.tmt_max_noites.value = ""; f.tmt_idade_minima.value = ""; f.tmt_portal.value = "";
-    return;
-  }
-  f.concelho.value = c.nome;
-  f.tmt_valor.value = (c.tmt.valorPorNoiteCents / 100).toFixed(2).replace(".", ",");
-  f.tmt_max_noites.value = c.tmt.maxNoites || "";
-  f.tmt_idade_minima.value = c.tmt.idadeMinima;
-  f.tmt_dia_declaracao.value = c.tmt.diaDeclaracao;
-  f.tmt_dia_pagamento.value = c.tmt.diaPagamento;
-  f.tmt_portal.value = c.portal || "";
-});
+(() => {
+  const sel = document.querySelector("select[data-concelhos]");
+  if (!sel) return;
+  const dados = JSON.parse(sel.dataset.concelhos);
+  const f = sel.form;
+  const nota = document.querySelector("[data-nota-concelho]");
+  const euros = (c) => (c / 100).toFixed(2).replace(".", ",");
+  sel.addEventListener("change", () => {
+    const c = dados[sel.value];
+    if (!c) return;
+    const t = c.tmt;
+    f.tmt_valor.value = t ? euros(t.valorPorNoiteCents) : "";
+    f.tmt_max_noites.value = t && t.maxNoites ? t.maxNoites : "";
+    f.tmt_idade_minima.value = t ? t.idadeMinima : "";
+    f.tmt_valor_baixa.value = t && t.valorBaixaCents != null ? euros(t.valorBaixaCents) : "";
+    f.tmt_alta_inicio.value = t && t.altaInicio ? t.altaInicio : "";
+    f.tmt_alta_fim.value = t && t.altaFim ? t.altaFim : "";
+    f.tmt_portal.value = c.portal || "";
+    if (f.regime_iva.value !== "isento") f.regime_iva.value = c.iva;
+    document.querySelector("[data-epocas]").open = !!(t && t.valorBaixaCents != null);
+    nota.textContent = t
+      ? "Valores de referência do regulamento de " + sel.value + ". Confirme no site da câmara." + (c.nota ? " " + c.nota : "")
+      : "Sem taxa turística conhecida em " + sel.value + ". Se a câmara entretanto a criou, preencha os valores.";
+  });
+})();
 </script>`;
+
+const NOMES_MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
+
+const seletorMes = (nome: string, atual: number | null | undefined) => html`<select name="${nome}">
+  <option value="">—</option>${NOMES_MESES.map((m, i) => html`<option value="${i + 1}"${atual === i + 1 ? " selected" : ""}>${m}</option>`)}</select>`;
 
 export function paginaAlojamento(
   a: Alojamento | null,
@@ -711,17 +725,27 @@ export function paginaAlojamento(
           <input type="number" name="horas_prazo_hospedes" min="0" max="336" required value="${a?.horas_prazo_hospedes ?? 48}"></label>
       </section>
       <section class="cartao">
-        <h2>Taxa municipal turística</h2>
-        <label>Preencher com as regras de
-          <select data-concelhos="${JSON.stringify(CONCELHOS)}">
-            <option value="">—</option>
-            ${CONCELHOS.map((c) => html`<option value="${c.nome}">${c.nome}</option>`)}
-            <option value="-">Concelho sem taxa turística</option>
+        <h2>Concelho e taxa turística</h2>
+        <label>Concelho
+          <select name="concelho" data-concelhos="${JSON.stringify(Object.fromEntries(CONCELHOS.map((c) => [c.nome, { tmt: c.tmt, nota: c.nota, portal: c.portal, iva: IVA_REGIAO[c.regiao] }])))}">
+            <option value="">— Escolher —</option>
+            ${a?.concelho && !CONCELHOS.some((c) => c.nome === a.concelho) ? html`<option value="${a.concelho}" selected>${a.concelho}</option>` : ""}
+            ${CONCELHOS.map((c) => html`<option value="${c.nome}"${c.nome === a?.concelho ? " selected" : ""}>${c.nome}${c.tmt ? " · com taxa" : ""}</option>`)}
           </select></label>
-        <p class="nota">Confirme sempre os valores no regulamento da sua câmara. Valor vazio ou 0 = sem taxa.</p>
-        <label>Concelho <input name="concelho" value="${v(a?.concelho)}"></label>
+        <p class="nota" data-nota-concelho>Ao escolher o concelho, a taxa turística é preenchida com os valores de referência do
+          regulamento municipal. Confirme sempre no site da câmara. Valor vazio ou 0 = sem taxa.</p>
         <label>Valor por hóspede e noite (€)
           <input name="tmt_valor" inputmode="decimal" value="${a?.tmt_valor_cents ? centsParaInput(a.tmt_valor_cents) : ""}"></label>
+        <details data-epocas${a?.tmt_valor_baixa_cents != null ? " open" : ""}>
+          <summary>Valor diferente na época baixa</summary>
+          <p class="nota">O valor acima aplica-se na época alta; no resto do ano, o valor da época baixa (0 = sem taxa).</p>
+          <label>Valor na época baixa (€)
+            <input name="tmt_valor_baixa" inputmode="decimal" value="${a?.tmt_valor_baixa_cents != null ? centsParaInput(a.tmt_valor_baixa_cents) : ""}"></label>
+          <div class="linha">
+            <label>Época alta de ${seletorMes("tmt_alta_inicio", a?.tmt_alta_inicio)}</label>
+            <label>até ${seletorMes("tmt_alta_fim", a?.tmt_alta_fim)}</label>
+          </div>
+        </details>
         <label>Máximo de noites cobradas por estadia (vazio = sem limite)
           <input type="number" name="tmt_max_noites" min="0" max="365" value="${a?.tmt_max_noites || ""}"></label>
         <label>Idade a partir da qual se paga

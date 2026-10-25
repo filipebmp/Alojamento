@@ -73,6 +73,9 @@ export interface Alojamento {
   tmt_dia_declaracao: number;
   tmt_dia_pagamento: number;
   tmt_portal: string | null;
+  tmt_valor_baixa_cents: number | null;
+  tmt_alta_inicio: number | null;
+  tmt_alta_fim: number | null;
   regime_iva: RegimeIva;
   criado_em: string;
 }
@@ -82,11 +85,15 @@ export type RegimeIva = "6" | "5" | "4" | "isento";
 
 // Taxa municipal turística de um concelho (valorPorNoiteCents 0 = não cobra).
 export interface RegrasTmt {
-  valorPorNoiteCents: number;
+  valorPorNoiteCents: number; // valor único, ou da época alta quando há épocas
   maxNoites: number; // 0 = sem limite
   idadeMinima: number;
   diaDeclaracao: number;
   diaPagamento: number;
+  // Épocas (opcional): fora dos meses altaInicio..altaFim (inclusive) aplica-se valorBaixaCents (0 = não cobra).
+  valorBaixaCents?: number | null;
+  altaInicio?: number | null;
+  altaFim?: number | null;
 }
 
 export interface Config {

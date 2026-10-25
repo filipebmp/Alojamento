@@ -755,8 +755,9 @@ app.post("/admin/alojamentos", async (c) => {
   }
   const res = await c.env.DB.prepare(
     `INSERT INTO alojamentos (nome, morada, registo_al, codigo_cofre, hora_checkin, horas_antes_codigo, horas_prazo_hospedes,
-       concelho, tmt_valor_cents, tmt_max_noites, tmt_idade_minima, tmt_dia_declaracao, tmt_dia_pagamento, tmt_portal, regime_iva, criado_em)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       concelho, tmt_valor_cents, tmt_max_noites, tmt_idade_minima, tmt_dia_declaracao, tmt_dia_pagamento, tmt_portal, regime_iva,
+       tmt_valor_baixa_cents, tmt_alta_inicio, tmt_alta_fim, criado_em)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   )
     .bind(...valoresAlojamento(v), new Date().toISOString())
     .run();
@@ -844,7 +845,8 @@ app.post("/admin/alojamentos/:id", async (c) => {
   await c.env.DB.prepare(
     `UPDATE alojamentos SET nome = ?, morada = ?, registo_al = ?, codigo_cofre = ?, hora_checkin = ?, horas_antes_codigo = ?,
        horas_prazo_hospedes = ?, concelho = ?, tmt_valor_cents = ?, tmt_max_noites = ?, tmt_idade_minima = ?,
-       tmt_dia_declaracao = ?, tmt_dia_pagamento = ?, tmt_portal = ?, regime_iva = ?
+       tmt_dia_declaracao = ?, tmt_dia_pagamento = ?, tmt_portal = ?, regime_iva = ?,
+       tmt_valor_baixa_cents = ?, tmt_alta_inicio = ?, tmt_alta_fim = ?
      WHERE id = ?`,
   )
     .bind(...valoresAlojamento(v), a.id)
@@ -1339,18 +1341,30 @@ function lerAlojamento(b: Record<string, string>) {
   if (portal && !/^https:\/\/\S+$/.test(portal)) return "O endereço do portal da câmara tem de começar por https://";
   const regimeIva = b.regime_iva ?? "6";
   if (!regimeIvaValido(regimeIva)) return "Escolha o regime de IVA.";
+  // Épocas: só com valor da época baixa e os dois meses da época alta.
+  const baixa = b.tmt_valor_baixa?.trim() ? cents(b.tmt_valor_baixa) : null;
+  const altaDe = b.tmt_alta_inicio?.trim() ? inteiro("tmt_alta_inicio", 1, 12) : null;
+  const altaAte = b.tmt_alta_fim?.trim() ? inteiro("tmt_alta_fim", 1, 12) : null;
+  const comEpocas = baixa != null || altaDe != null || altaAte != null;
+  if (comEpocas && (baixa == null || baixa < 0 || altaDe == null || altaAte == null)) {
+    return "Época alta da taxa turística: indique o valor da época baixa e os meses de início e fim (ou deixe os três vazios).";
+  }
   return {
     nome, morada: texto("morada"), registo_al: texto("registo_al"), codigo_cofre: codigo, hora_checkin: hora,
     horas_antes_codigo: horasAntes, horas_prazo_hospedes: horasPrazo, concelho: concelho ?? "", tmt_valor_cents: valor,
     tmt_max_noites: maxNoites, tmt_idade_minima: idade, tmt_dia_declaracao: diaDecl, tmt_dia_pagamento: diaPag, tmt_portal: portal,
     regime_iva: regimeIva,
+    tmt_valor_baixa_cents: comEpocas ? baixa : null,
+    tmt_alta_inicio: comEpocas ? altaDe : null,
+    tmt_alta_fim: comEpocas ? altaAte : null,
   };
 }
 
 // Mesma ordem das colunas no INSERT e no UPDATE de alojamentos.
 function valoresAlojamento(v: Exclude<ReturnType<typeof lerAlojamento>, string>) {
   return [v.nome, v.morada, v.registo_al, v.codigo_cofre, v.hora_checkin, v.horas_antes_codigo, v.horas_prazo_hospedes,
-    v.concelho, v.tmt_valor_cents, v.tmt_max_noites, v.tmt_idade_minima, v.tmt_dia_declaracao, v.tmt_dia_pagamento, v.tmt_portal, v.regime_iva];
+    v.concelho, v.tmt_valor_cents, v.tmt_max_noites, v.tmt_idade_minima, v.tmt_dia_declaracao, v.tmt_dia_pagamento, v.tmt_portal, v.regime_iva,
+    v.tmt_valor_baixa_cents, v.tmt_alta_inicio, v.tmt_alta_fim];
 }
 
 function lerHospede(b: Record<string, string>, p: string) {
