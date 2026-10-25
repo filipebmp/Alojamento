@@ -46,3 +46,5 @@ footer { margin: 32px 0 8px; color: var(--suave); font-size: .9rem; }
 table { width: 100%; border-collapse: collapse; font-size: .9rem; }
 th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--borda); vertical-align: top; }
 code { font-size: .85rem; }
+.config { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 8px 0 0; }
+.config dd { margin: 0; overflow-wrap: anywhere; }

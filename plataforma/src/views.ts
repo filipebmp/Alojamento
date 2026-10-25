@@ -132,9 +132,19 @@ export function paginaEntrar(erro?: string) {
 
 const NOMES_ESTADO = { ativa: "ativa", pagamento_em_atraso: "pagamento em atraso", inativa: "inativa", desconhecida: "desconhecida" };
 
-export function paginaLicencas(linhas: { licenca: Licenca; cliente: Cliente | null }[], novaChave?: string) {
+export interface EstadoConfig {
+  nome: string;
+  ok: boolean;
+  detalhe: string;
+}
+
+export function paginaLicencas(linhas: { licenca: Licenca; cliente: Cliente | null }[], config: EstadoConfig[], novaChave?: string) {
   return pagina("Licenças", html`<h1>Licenças</h1>
     ${novaChave ? html`<p>✅ Licença de cortesia criada:</p><p class="chave">${novaChave}</p>` : ""}
+    <details class="cartao" ${config.every((x) => x.ok) ? "" : "open"}>
+      <summary>Configuração ${config.every((x) => x.ok) ? "✅" : "⚠️"}</summary>
+      <dl class="config">${config.map((x) => html`<dt>${x.ok ? "✅" : "⚠️"} ${x.nome}</dt><dd class="${x.ok ? "" : "erro"}">${x.detalhe}</dd>`)}</dl>
+    </details>
     <div class="tabela"><table>
       <tr><th>Chave</th><th>Cliente</th><th>Tipo</th><th>Estado</th><th>Pagos</th><th>Ativos</th><th>Versão</th><th>Última comunicação</th><th></th></tr>
       ${linhas.map(({ licenca: l, cliente: c }) => {

@@ -52,6 +52,7 @@ for (const caminho of ["/c/*", "/admin", "/admin/*", "/login", "/logout", "/conf
 // ---------- Site público ----------
 
 let precoEmCache: { cents: number | null; ate: number } | null = null;
+let erroPreco: string | null = null; // mostrado na gestão para diagnosticar a configuração do Stripe
 
 async function precoMensal(env: Env): Promise<number | null> {
   if (!env.STRIPE_SECRET_KEY || !env.STRIPE_PRECO) return null;
@@ -59,9 +60,11 @@ async function precoMensal(env: Env): Promise<number | null> {
   try {
     const p = await stripe<Price>(env.STRIPE_SECRET_KEY, "GET", `/prices/${env.STRIPE_PRECO}`);
     precoEmCache = { cents: p.unit_amount, ate: Date.now() + 3_600_000 };
+    erroPreco = null;
     return p.unit_amount;
   } catch (e) {
     console.error("Preço do Stripe indisponível", e);
+    erroPreco = String(e instanceof Error ? e.message : e);
     return null;
   }
 }
@@ -222,7 +225,16 @@ async function mostrarLicencas(c: Ctx, novaChave?: string) {
     c.env.DB.prepare("SELECT * FROM clientes").all<Cliente>(),
   ]);
   const porId = new Map(clientes.results.map((x) => [x.id, x]));
-  return c.html(paginaLicencas(licencas.results.map((l) => ({ licenca: l, cliente: l.cliente_id ? porId.get(l.cliente_id) ?? null : null })), novaChave));
+  const preco = await precoMensal(c.env);
+  const env = c.env;
+  const estado = [
+    { nome: "Chave secreta do Stripe", ok: !!env.STRIPE_SECRET_KEY, detalhe: env.STRIPE_SECRET_KEY ? (env.STRIPE_SECRET_KEY.startsWith("sk_test_") ? "modo de teste" : env.STRIPE_SECRET_KEY.slice(0, 8) + "…") : "segredo STRIPE_SECRET_KEY em falta" },
+    { nome: "Preço", ok: preco != null, detalhe: preco != null ? `${(preco / 100).toFixed(2).replace(".", ",")} € por alojamento` : erroPreco ?? (env.STRIPE_PRECO ? "sem resposta" : "STRIPE_PRECO em falta") },
+    { nome: "Segredo do webhook", ok: !!env.STRIPE_WEBHOOK_SECRET, detalhe: env.STRIPE_WEBHOOK_SECRET ? "definido" : "segredo STRIPE_WEBHOOK_SECRET em falta" },
+    { nome: "Vendas abertas", ok: vendasAbertas(env), detalhe: env.VENDAS_ABERTAS === "sim" ? "sim" : "não" },
+    { nome: "InvoiceXpress", ok: !!configInvoiceXpress(env), detalhe: configInvoiceXpress(env) ? env.INVOICEXPRESS_CONTA! : "não configurado (faturas à mão)" },
+  ];
+  return c.html(paginaLicencas(licencas.results.map((l) => ({ licenca: l, cliente: l.cliente_id ? porId.get(l.cliente_id) ?? null : null })), estado, novaChave));
 }
 
 app.get("/gestao", async (c) => {
