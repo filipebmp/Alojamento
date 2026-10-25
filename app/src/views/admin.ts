@@ -69,6 +69,10 @@ export const ORIGENS: [string, string][] = [["booking", "Booking"], ["airbnb", "
 const campoOrigem = (atual: string) => html`<label>Plataforma
   <select name="origem">${ORIGENS.map(([v, t]) => html`<option value="${v}"${v === atual ? " selected" : ""}>${t}</option>`)}</select></label>`;
 
+// Botão discreto para desfazer uma marcação feita por engano.
+const anular = (acao: string, pergunta: string) => html`<form method="post" action="${acao}" onsubmit="return confirm(this.dataset.pergunta)" data-pergunta="${pergunta}">
+  <button class="ligacao">Anular</button></form>`;
+
 const NOMES_DOC: Record<string, string> = { P: "Passaporte", B: "Bilhete de identidade", O: "Outro" };
 
 export function paginaReserva(
@@ -249,7 +253,8 @@ export function paginaReserva(
             <a href="https://siba.ssi.gov.pt" target="_blank" rel="noopener">siba.ssi.gov.pt</a>
             (entrada ${dataPt(r.checkin)}, saída ${dataPt(r.checkout)}).</p>
           ${r.siba_submetido_em
-            ? html`<p>✅ Comunicado em ${dataPt(r.siba_submetido_em)}</p>`
+            ? html`<div class="botoes"><span>✅ Comunicado em ${dataPt(r.siba_submetido_em)}</span>
+                ${anular(`/admin/reservas/${r.id}/siba/anular`, "Anular a marcação de comunicado ao SIBA? (Só no bookgest: nada é enviado ao SIBA.)")}</div>`
             : html`<form method="post" action="/admin/reservas/${r.id}/siba"><button>Marcar como comunicado</button></form>`}`
         : html`<p>Sem hóspedes estrangeiros registados.</p>`}
     </section>
@@ -266,7 +271,10 @@ export function paginaReserva(
       ${faturacao.erro ? html`<p class="aviso">A fatura não foi emitida: ${faturacao.erro}</p>` : ""}
       ${faturacao.aviso ? html`<p class="aviso">${faturacao.aviso}</p>` : ""}
       ${r.fatura_emitida_em
-        ? html`<p>✅ Fatura ${r.fatura_numero} emitida em ${dataPt(r.fatura_emitida_em)}${r.fatura_programa ? ` no ${NOMES_PROGRAMA[r.fatura_programa as Programa] ?? r.fatura_programa}` : ""}</p>
+        ? html`<div class="botoes"><span>✅ Fatura ${r.fatura_numero} emitida em ${dataPt(r.fatura_emitida_em)}${r.fatura_programa ? ` no ${NOMES_PROGRAMA[r.fatura_programa as Programa] ?? r.fatura_programa}` : ""}</span>
+            ${anular(`/admin/reservas/${r.id}/fatura/anular`, r.fatura_programa
+              ? `Desligar esta fatura da reserva? A fatura continua emitida no ${NOMES_PROGRAMA[r.fatura_programa as Programa] ?? r.fatura_programa}: se estiver errada, anule-a lá (nota de crédito).`
+              : "Anular a marcação de fatura emitida? (Só no bookgest.)")}</div>
           ${r.fatura_pdf ? html`<p><a href="${r.fatura_pdf}" target="_blank" rel="noopener">Ver a fatura (PDF)</a></p>` : ""}`
         : html`${r.fatura_externa_id && r.fatura_programa === "invoicexpress"
             ? html`<p class="nota">Fatura criada em rascunho no InvoiceXpress. Finalize-a lá e registe o número abaixo, ou emita daqui para a finalizar.</p>`
@@ -355,10 +363,10 @@ export function paginaTmt(porAlojamento: TmtAlojamento[], mostrarNome: boolean) 
           ${semDados ? html`<p class="erro">⚠️ ${semDados} reserva(s) sem todos os hóspedes registados: valores incompletos.</p>` : ""}
           <div class="botoes">
             ${d?.declarado_em
-              ? html`<span>✅ Declarado ${dataPt(d.declarado_em)}</span>`
+              ? html`<span>✅ Declarado ${dataPt(d.declarado_em)}</span>${anular(`/admin/tmt/${a.id}/${mes}/declarado/anular`, "Anular a marcação de declarado? (Só no bookgest: nada é enviado à câmara.)")}`
               : html`<form method="post" action="/admin/tmt/${a.id}/${mes}/declarado"><button>Declarado (até ${dataPt(prazos.declarar)})</button></form>`}
             ${d?.pago_em
-              ? html`<span>✅ Pago ${dataPt(d.pago_em)}</span>`
+              ? html`<span>✅ Pago ${dataPt(d.pago_em)}</span>${anular(`/admin/tmt/${a.id}/${mes}/pago/anular`, "Anular a marcação de pago? (Só no bookgest.)")}`
               : html`<form method="post" action="/admin/tmt/${a.id}/${mes}/pago"><button>Pago (até ${dataPt(prazos.pagar)})</button></form>`}
           </div>
         </section>`;

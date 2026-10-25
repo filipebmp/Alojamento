@@ -331,7 +331,7 @@ const soGestor = async (c: Ctx, next: () => Promise<void>) => {
 for (const caminho of [
   "/admin/alojamentos", "/admin/alojamentos/*", "/admin/instrucoes", "/admin/tmt", "/admin/tmt/*",
   "/admin/definicoes", "/admin/definicoes/*", "/admin/utilizadores", "/admin/utilizadores/*",
-  "/admin/reservas/:id/valores", "/admin/reservas/:id/siba", "/admin/reservas/:id/fatura", "/admin/reservas/:id/fatura/portal", "/admin/reservas/:id/fatura/emitir", "/admin/reservas/:id/cancelar",
+  "/admin/reservas/:id/valores", "/admin/reservas/:id/siba", "/admin/reservas/:id/fatura", "/admin/reservas/:id/fatura/portal", "/admin/reservas/:id/fatura/emitir", "/admin/reservas/:id/fatura/anular", "/admin/reservas/:id/siba/anular", "/admin/reservas/:id/cancelar",
   "/admin/reservas/:id/ignorar", "/admin/reservas/:id/manter", "/admin/emails", "/admin/emails/*", "/admin/mais",
 ]) {
   app.use(caminho, soGestor);
@@ -507,6 +507,19 @@ app.post("/admin/reservas/:id/valores", async (c) => {
   return c.redirect(`/admin/reservas/${c.req.param("id")}`);
 });
 
+app.post("/admin/reservas/:id/siba/anular", async (c) => {
+  await c.env.DB.prepare("UPDATE reservas SET siba_submetido_em = NULL WHERE id = ?").bind(Number(c.req.param("id"))).run();
+  return c.redirect(`/admin/reservas/${c.req.param("id")}#siba`);
+});
+
+// Só desliga a fatura da reserva no bookgest; uma fatura emitida num programa de faturação continua lá (anula-se nesse programa).
+app.post("/admin/reservas/:id/fatura/anular", async (c) => {
+  await c.env.DB.prepare(
+    "UPDATE reservas SET fatura_numero = NULL, fatura_emitida_em = NULL, fatura_programa = NULL, fatura_externa_id = NULL, fatura_pdf = NULL WHERE id = ?",
+  ).bind(Number(c.req.param("id"))).run();
+  return c.redirect(`/admin/reservas/${c.req.param("id")}#fatura`);
+});
+
 app.post("/admin/reservas/:id/siba", async (c) => {
   await c.env.DB.prepare("UPDATE reservas SET siba_submetido_em = ? WHERE id = ?")
     .bind(new Date().toISOString(), Number(c.req.param("id")))
@@ -671,6 +684,16 @@ app.get("/admin/tmt", async (c) => {
     return { alojamento: a, resumos };
   });
   return c.html(paginaTmt(porAlojamento, alojamentos.length > 1));
+});
+
+// Anular uma marcação feita por engano (só no bookgest: nada é enviado à câmara).
+// Registada antes da rota de marcar: o padrão {declarado|pago} também apanharia ".../declarado/anular".
+app.post("/admin/tmt/:alojamento/:mes/:acao{declarado|pago}/anular", async (c) => {
+  const coluna = c.req.param("acao") === "declarado" ? "declarado_em" : "pago_em";
+  await c.env.DB.prepare(`UPDATE declaracoes_tmt_alojamento SET ${coluna} = NULL WHERE alojamento_id = ? AND mes = ?`)
+    .bind(Number(c.req.param("alojamento")), c.req.param("mes"))
+    .run();
+  return c.redirect("/admin/tmt");
 });
 
 app.post("/admin/tmt/:alojamento/:mes/:acao{declarado|pago}", async (c) => {

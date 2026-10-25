@@ -80,6 +80,8 @@ button.secundario:hover, .botao.secundario:hover { background: var(--neutro-suav
 button.perigo { background: var(--cartao); color: var(--atrasado); border: 1px solid var(--atrasado); }
 button.perigo:hover { background: var(--atrasado-suave); }
 button:disabled { opacity: .5; }
+button.ligacao { min-height: 36px; margin: 0; padding: 4px 8px; background: none; color: var(--suave); font-weight: 500; font-size: .87rem; text-decoration: underline; }
+button.ligacao:hover { background: var(--neutro-suave); }
 .botao.grande, button.grande { width: 100%; min-height: 50px; }
 .entrada { max-width: 400px; margin: 8vh auto 0; }
 .entrada > .marca { justify-content: center; margin-bottom: 16px; font-size: 1.3rem; }
