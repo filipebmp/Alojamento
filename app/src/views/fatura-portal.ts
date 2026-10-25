@@ -30,12 +30,12 @@ document.querySelectorAll("[data-copiar]").forEach((b) => b.addEventListener("cl
 </script>`;
 
 export function paginaFaturaPortal(r: Reserva, f: FaturaPortal | null, falta: string | null) {
-  const voltar = html`<a class="voltar" href="/admin/reservas/${r.id}#fatura">${icone("voltar", 18)}${r.nome_titular}</a>`;
+  const voltar = `/admin/reservas/${r.id}#fatura`;
   if (!f || falta) {
-    return pagina("Fatura-recibo", html`${voltar}<h1>Fatura-recibo</h1>
-      <p class="aviso">${falta ?? "Faltam dados para preparar a fatura."}</p>`, { admin: true, seccao: "reservas" });
+    return pagina("Fatura-recibo", html`<h1>Fatura-recibo</h1>
+      <p class="aviso">${falta ?? "Faltam dados para preparar a fatura."}</p>`, { admin: true, seccao: "reservas", voltar });
   }
-  return pagina("Fatura-recibo", html`${voltar}
+  return pagina("Fatura-recibo", html`
     <h1>Emitir no Portal das Finanças</h1>
     <p class="nota">Os campos estão pela ordem do formulário. Copie cada um e cole no Portal; no fim, registe aqui o número da fatura.</p>
 
@@ -96,5 +96,5 @@ export function paginaFaturaPortal(r: Reserva, f: FaturaPortal | null, falta: st
             <button>Registar</button></form>`}
     </section>
     ${SCRIPT_COPIAR}
-  `, { admin: true, seccao: "reservas" });
+  `, { admin: true, seccao: "reservas", voltar });
 }

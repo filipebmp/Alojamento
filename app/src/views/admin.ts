@@ -60,7 +60,7 @@ export function paginaNovaReserva(
           <label>Comissão da plataforma (€) <input name="comissao" inputmode="decimal" placeholder="0,00"></label>`
         : ""}
       <button type="submit">Criar</button>
-    </form>`, { admin: papel === "gestor" ? true : "equipa", seccao: "reservas" });
+    </form>`, { admin: papel === "gestor" ? true : "equipa", seccao: "reservas", voltar: "/admin/reservas" });
 }
 
 // Origem guardada em reservas.origem ("manual" = reserva direta).
@@ -153,7 +153,6 @@ export function paginaReserva(
   ];
 
   return pagina(r.nome_titular, html`
-    <a class="voltar" href="/admin/reservas">${icone("voltar", 18)}Reservas</a>
     <p class="sobre nota" style="margin: 0">${gestor ? html`<a href="/admin/alojamentos/${alojamento.id}">${alojamento.nome}</a>` : alojamento.nome}${r.ref_booking ? ` · ${r.ref_booking}` : ""}</p>
     <h1>${r.incompleta ? "Reserva por completar" : r.nome_titular}</h1>
     <div class="botoes">${chipOrigem(r)}${estado}</div>
@@ -298,7 +297,7 @@ export function paginaReserva(
             <button class="perigo">Cancelar reserva</button></form>`}
     </section>
     ` : ""}
-  `, { admin: gestor ? true : "equipa", seccao: "reservas" });
+  `, { admin: gestor ? true : "equipa", seccao: "reservas", voltar: "/admin/reservas" });
 }
 
 export interface ResumoMesTmt {
@@ -412,7 +411,7 @@ export function paginaInstrucoes(a: Alojamento, passos: Passo[], erro?: string) 
         <button type="submit">Adicionar</button>
       </form>
     </section>
-    ${SCRIPT_REDIMENSIONAR}`, { admin: true, seccao: "alojamentos" });
+    ${SCRIPT_REDIMENSIONAR}`, { admin: true, seccao: "alojamentos", voltar: `/admin/alojamentos/${a.id}` });
 }
 
 function centsParaInput(cents: number): string {
@@ -449,7 +448,7 @@ export function paginaCodigos(codigos: string[], opcoes: { primeiraVez: boolean 
     <div class="botoes">
       <button type="button" data-texto="${codigos.join("\n")}" onclick="navigator.clipboard.writeText(this.dataset.texto).then(() => this.textContent = 'Copiados ✓')">Copiar</button>
       <a class="botao" href="${opcoes.primeiraVez ? "/admin" : "/admin/conta"}">Já os guardei</a>
-    </div>`, { admin: opcoes.primeiraVez ? undefined : true, seccao: "conta" });
+    </div>`, { admin: opcoes.primeiraVez ? undefined : true, seccao: "conta", voltar: opcoes.primeiraVez ? undefined : "/admin/conta" });
 }
 
 export function paginaRecuperar(opcoes: { enviado?: boolean; erroEmail?: string; erroCodigo?: string } = {}) {
@@ -570,7 +569,7 @@ export function paginaUtilizadores(lista: Utilizador[], meuId: number, opcoes: {
         <p class="nota">Dê-lhe esta palavra-passe; depois pode mudá-la em "Conta".</p>
         <button type="submit">Criar</button>
       </form>
-    </section>`, { admin: true, seccao: "conta" });
+    </section>`, { admin: true, seccao: "utilizadores" });
 }
 
 const NOMES_ESTADO_LICENCA = { ativa: "ativa", pagamento_em_atraso: "pagamento em atraso", inativa: "inativa", desconhecida: "não reconhecida" };
@@ -592,12 +591,6 @@ export function paginaDefinicoes(opcoes: {
   const { chave, estado, erro, aviso } = opcoes.licenca;
   return pagina("Definições", html`<h1>Definições</h1>
     ${opcoes.erro ? html`<p class="erro">${opcoes.erro}</p>` : ""}
-    <ul class="lista">
-      <li><a href="/admin/conta"><strong>A minha conta</strong><span class="prazo">Email, palavra-passe, códigos de recuperação</span></a></li>
-      <li><a href="/admin/utilizadores"><strong>Utilizadores</strong><span class="prazo">Gestores e equipa com acesso ao painel</span></a></li>
-      <li><a href="/admin/emails"><strong>Emails de reserva</strong><span class="prazo">Reencaminhar os emails do Booking e do Airbnb</span></a></li>
-      <li><a href="/admin/definicoes/faturacao"><strong>Faturação</strong><span class="prazo">InvoiceXpress, Vendus ou TOConline: emitir a fatura-recibo com um clique</span></a></li>
-    </ul>
     <section class="cartao">
       <h2>Licença</h2>
       ${estado
@@ -727,7 +720,7 @@ export function paginaAlojamento(
           : ""}`
       : ""}
     ${a ? seccaoCalendarios(a, opcoes.calendarios ?? []) : ""}
-    ${SCRIPT_CONCELHO}`, { admin: true, seccao: "alojamentos" });
+    ${SCRIPT_CONCELHO}`, { admin: true, seccao: "alojamentos", voltar: "/admin/alojamentos" });
 }
 
 // ---------- Calendários (importação de reservas) ----------

@@ -18,7 +18,6 @@ export function paginaFaturacao(cfg: ConfigFaturacao | null, opcoes: { erro?: st
   const opcao = (v: Programa | "", t: string) => html`<option value="${v}"${p === v ? " selected" : ""}>${t}</option>`;
 
   return pagina("Faturação", html`
-    <a class="voltar" href="/admin/definicoes">${icone("voltar", 18)}Definições</a>
     <h1>Faturação</h1>
     <p class="nota">Ligue o seu programa de faturação certificado para emitir a fatura-recibo de cada reserva com um clique.
       Sem programa ligado, o bookgest prepara os campos para copiar para o Portal das Finanças (gratuito).</p>
@@ -92,5 +91,5 @@ export function paginaFaturacao(cfg: ConfigFaturacao | null, opcoes: { erro?: st
       mostrar();
     })();
     </script>
-  `, { admin: true, seccao: "definicoes" });
+  `, { admin: true, seccao: "faturacao" });
 }

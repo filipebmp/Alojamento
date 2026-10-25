@@ -7,7 +7,7 @@ import type { Barra, NumerosHoje } from "../lib/painel";
 import { type Pendente, euros } from "../lib/regras";
 import type { Alojamento, Reserva } from "../lib/tipos";
 import type { Papel } from "../lib/utilizadores";
-import { type NomeIcone, dataExtenso, dataPt, diaSemana, icone, mesCurto, pagina } from "./layout";
+import { ITENS_MAIS, type NomeIcone, dataExtenso, dataPt, diaSemana, icone, mesCurto, pagina } from "./layout";
 
 export type Origem = "booking" | "airbnb" | "direta" | "outra";
 
@@ -266,18 +266,10 @@ export function paginaReservas(o: {
 // ---------- Mais (telemóvel) ----------
 
 export function paginaMais() {
-  const itens: [NomeIcone, string, string, string][] = [
-    ["alojamentos", "Alojamentos", "/admin/alojamentos", "Dados, código das chaves, calendários e instruções"],
-    ["emails", "Emails de reserva", "/admin/emails", "Reencaminhar os emails do Booking e do Airbnb"],
-    ["tmt", "Faturação", "/admin/definicoes/faturacao", "Ligar o programa de faturação"],
-    ["definicoes", "Definições", "/admin/definicoes", "Licença, versão"],
-    ["conta", "Utilizadores", "/admin/utilizadores", "Gestores e equipa com acesso ao painel"],
-    ["conta", "A minha conta", "/admin/conta", "Email, palavra-passe, códigos de recuperação"],
-  ];
   return pagina("Mais", html`<h1>Mais</h1>
     <div class="grupo">
-      ${itens.map(([i, t, l, d]) => html`<a class="item" href="${l}"><span class="simbolo">${icone(i, 18)}</span>
-        <span class="texto"><strong>${t}</strong><span>${d}</span></span>${icone("seguinte", 18)}</a>`)}
+      ${ITENS_MAIS.map((i) => html`<a class="item" href="${i.link}"><span class="simbolo">${icone(i.seccao as NomeIcone, 18)}</span>
+        <span class="texto"><strong>${i.nome}</strong><span>${i.descricao ?? ""}</span></span>${icone("seguinte", 18)}</a>`)}
     </div>
     <form method="post" action="/logout"><button class="secundario">${icone("sair", 18)}Terminar sessão</button></form>
   `, { admin: true, seccao: "mais" });

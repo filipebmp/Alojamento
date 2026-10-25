@@ -4,7 +4,7 @@ import { VERSAO } from "../versao";
 
 type Conteudo = HtmlEscapedString | Promise<HtmlEscapedString>;
 
-export type Seccao = "hoje" | "calendario" | "reservas" | "tmt" | "alojamentos" | "emails" | "definicoes" | "conta" | "mais";
+export type Seccao = "hoje" | "calendario" | "reservas" | "tmt" | "alojamentos" | "emails" | "faturacao" | "utilizadores" | "definicoes" | "conta" | "mais";
 
 // Ícones de traço (24×24), herdam a cor do texto.
 const ICONES = {
@@ -16,6 +16,8 @@ const ICONES = {
   emails: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/>',
   definicoes: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
   conta: '<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
+  faturacao: '<path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M8 13h8M8 17h5"/>',
+  utilizadores: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M18 14a6.5 6.5 0 0 1 3.5 6"/>',
   mais: '<circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/>',
   mais_reserva: '<path d="M12 5v14M5 12h14"/>',
   voltar: '<path d="M15 6l-6 6 6 6"/>',
@@ -34,11 +36,12 @@ export function icone(nome: NomeIcone, tamanho = 22) {
   return raw(`<svg class="icone" width="${tamanho}" height="${tamanho}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONES[nome]}</svg>`);
 }
 
-interface ItemMenu {
+export interface ItemMenu {
   seccao: Seccao;
   nome: string;
   curto?: string;
   link: string;
+  descricao?: string; // no ecrã "Mais"
 }
 
 const MENU_GESTOR: ItemMenu[] = [
@@ -46,10 +49,12 @@ const MENU_GESTOR: ItemMenu[] = [
   { seccao: "calendario", nome: "Calendário", link: "/admin/calendario" },
   { seccao: "reservas", nome: "Reservas", link: "/admin/reservas" },
   { seccao: "tmt", nome: "Taxa turística", curto: "Taxas", link: "/admin/tmt" },
-  { seccao: "alojamentos", nome: "Alojamentos", link: "/admin/alojamentos" },
-  { seccao: "emails", nome: "Emails de reserva", link: "/admin/emails" },
-  { seccao: "definicoes", nome: "Definições", link: "/admin/definicoes" },
-  { seccao: "conta", nome: "A minha conta", link: "/admin/conta" },
+  { seccao: "alojamentos", nome: "Alojamentos", link: "/admin/alojamentos", descricao: "Dados, código das chaves, calendários e instruções" },
+  { seccao: "emails", nome: "Emails de reserva", link: "/admin/emails", descricao: "Reencaminhar os emails do Booking e do Airbnb" },
+  { seccao: "faturacao", nome: "Faturação", link: "/admin/definicoes/faturacao", descricao: "Ligar o programa de faturação" },
+  { seccao: "utilizadores", nome: "Utilizadores", link: "/admin/utilizadores", descricao: "Gestores e equipa com acesso ao painel" },
+  { seccao: "definicoes", nome: "Definições", link: "/admin/definicoes", descricao: "Licença e versão" },
+  { seccao: "conta", nome: "A minha conta", link: "/admin/conta", descricao: "Email, palavra-passe, códigos de recuperação" },
 ];
 
 const MENU_EQUIPA: ItemMenu[] = [
@@ -61,6 +66,8 @@ const MENU_EQUIPA: ItemMenu[] = [
 
 // No telemóvel, o gestor vê 4 secções e "Mais" com as restantes.
 const SEPARADORES_GESTOR: Seccao[] = ["hoje", "calendario", "reservas", "tmt"];
+
+export const ITENS_MAIS = MENU_GESTOR.filter((i) => !SEPARADORES_GESTOR.includes(i.seccao));
 
 function menu(papel: true | "equipa", ativa: Seccao | undefined) {
   const itens = papel === "equipa" ? MENU_EQUIPA : MENU_GESTOR;
@@ -81,7 +88,14 @@ function menu(papel: true | "equipa", ativa: Seccao | undefined) {
 
 // admin: true = menu do gestor; "equipa" = menu reduzido da equipa. seccao: a entrada do menu assinalada.
 // botaoNovo: botão flutuante "Nova reserva" (telemóvel).
-export function pagina(titulo: string, corpo: Conteudo, opcoes: { admin?: boolean | "equipa"; seccao?: Seccao; botaoNovo?: boolean } = {}) {
+// voltar: página anterior (sempre visível). Sem ele, as secções do "Mais" voltam ao "Mais" (só no telemóvel).
+export function pagina(
+  titulo: string,
+  corpo: Conteudo,
+  opcoes: { admin?: boolean | "equipa"; seccao?: Seccao; botaoNovo?: boolean; voltar?: string } = {},
+) {
+  const doMais = opcoes.admin === true && !!opcoes.seccao && ITENS_MAIS.some((i) => i.seccao === opcoes.seccao);
+  const voltar = opcoes.voltar ?? (doMais ? "/admin/mais" : null);
   return html`<!doctype html>
 <html lang="pt">
 <head>
@@ -96,7 +110,9 @@ export function pagina(titulo: string, corpo: Conteudo, opcoes: { admin?: boolea
 </head>
 <body class="${opcoes.admin ? "com-menu" : ""}">
   ${opcoes.admin ? menu(opcoes.admin, opcoes.seccao) : ""}
-  <main>${corpo}</main>
+  <main>${voltar
+    ? html`<a class="voltar${opcoes.voltar ? "" : " so-telemovel"}" href="${voltar}">${icone("voltar", 18)}Voltar</a>`
+    : ""}${corpo}</main>
   ${opcoes.admin && opcoes.botaoNovo
     ? html`<a class="flutuante" href="/admin/reservas/nova" aria-label="Nova reserva">${icone("mais_reserva", 24)}</a>`
     : ""}
