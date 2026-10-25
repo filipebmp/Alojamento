@@ -3,7 +3,8 @@ import type { HtmlEscapedString } from "hono/utils/html";
 
 type Conteudo = HtmlEscapedString | Promise<HtmlEscapedString>;
 
-export function pagina(titulo: string, corpo: Conteudo, opcoes: { admin?: boolean } = {}) {
+// admin: true = menu do gestor; "equipa" = menu reduzido da equipa.
+export function pagina(titulo: string, corpo: Conteudo, opcoes: { admin?: boolean | "equipa" } = {}) {
   return html`<!doctype html>
 <html lang="pt">
 <head>
@@ -18,7 +19,9 @@ export function pagina(titulo: string, corpo: Conteudo, opcoes: { admin?: boolea
 <body>
   ${opcoes.admin
     ? html`<header><a href="/admin" class="marca">🏠 bookgest</a>
-        <nav><a href="/admin/reservas/nova">+ Reserva</a><a href="/admin/tmt">Taxa turística</a><a href="/admin/alojamentos">Alojamentos</a><a href="/admin/definicoes">Definições</a></nav></header>`
+        <nav><a href="/admin/reservas/nova">+ Reserva</a>${opcoes.admin === "equipa"
+          ? html`<a href="/admin/conta">Conta</a>`
+          : html`<a href="/admin/tmt">Taxa turística</a><a href="/admin/alojamentos">Alojamentos</a><a href="/admin/definicoes">Definições</a>`}</nav></header>`
     : ""}
   <main>${corpo}</main>
   ${opcoes.admin ? html`<script>if("serviceWorker" in navigator)navigator.serviceWorker.register("/sw.js")</script>` : ""}

@@ -20,21 +20,42 @@ import { configAlojamento, regrasTmt } from "./lib/concelhos";
 import { hojeLisboa } from "./lib/datas";
 import { type EstadoGuardado, URL_LICENCAS_PREDEFINIDO, avisoLicenca, consultarLicenca } from "./lib/licenca";
 import { estadoCodigo, mesesAteAnterior, ordenarPendentes, pendentesReserva, pendentesTmt } from "./lib/regras";
-import { SENHA_MINIMA, hashSenha, iguais, verificarSenha } from "../../comum/senha";
+import { SENHA_MINIMA, iguais, verificarSenha } from "../../comum/senha";
 import { calcularTmt, cobraTmt } from "./lib/tmt";
 import type { Alojamento } from "./lib/tipos";
+import {
+  type Papel,
+  type Utilizador,
+  codigosDisponiveis,
+  contarUtilizadores,
+  criarUtilizador,
+  emailValido,
+  eUltimoGestor,
+  gerarCodigos,
+  listarUtilizadores,
+  mudarSenha,
+  novaVersaoSessao,
+  obterPorEmail,
+  obterUtilizador,
+  usarCodigo,
+} from "./lib/utilizadores";
 import {
   type ResumoMesTmt,
   paginaAlojamento,
   paginaAlojamentos,
+  paginaCodigos,
   paginaConfigurar,
+  paginaConta,
   paginaDefinicoes,
   paginaInstrucoes,
   paginaLogin,
   paginaNovaReserva,
   paginaPainel,
+  paginaRecuperar,
   paginaReserva,
+  paginaSemAcesso,
   paginaTmt,
+  paginaUtilizadores,
 } from "./views/admin";
 import { paginaHospede } from "./views/hospede";
 import { VERSAO } from "./versao";
@@ -50,19 +71,20 @@ type Env = {
   PLATAFORMA?: Fetcher; // ligação direta à plataforma, só na instalação do fornecedor (mesma conta Cloudflare)
 };
 
-type Ctx = Context<{ Bindings: Env }>;
+type Variaveis = { utilizador: Utilizador };
+type Ctx = Context<{ Bindings: Env; Variables: Variaveis }>;
 
 const COOKIE = "sessao";
 const MAX_IMAGEM = 1_500_000;
 
-const app = new Hono<{ Bindings: Env }>();
+const app = new Hono<{ Bindings: Env; Variables: Variaveis }>();
 
 app.use("*", async (c, next) => {
   await prepararInstalacao(c.env.DB, c.env.CODIGO_CHAVES);
   await next();
 });
 
-// ---------- Autenticação do gestor ----------
+// ---------- Autenticação ----------
 
 async function segredoSessao(c: Ctx): Promise<string> {
   if (c.env.SESSION_SECRET) return c.env.SESSION_SECRET;
@@ -70,14 +92,10 @@ async function segredoSessao(c: Ctx): Promise<string> {
   return definicaoInicial(c.env.DB, "segredo_sessao", aleatorio);
 }
 
-// Muda quando a palavra-passe é alterada, invalidando as sessões abertas noutros dispositivos.
-async function valorSessao(c: Ctx): Promise<string> {
-  const versao = await lerDefinicao(c.env.DB, "versao_sessao");
-  return versao ? `admin:${versao}` : "admin";
-}
-
-async function abrirSessao(c: Ctx) {
-  await setSignedCookie(c, COOKIE, await valorSessao(c), await segredoSessao(c), {
+// Cookie "<id>:<versão>": a versão muda quando a palavra-passe é alterada ou o utilizador desativado,
+// o que termina as sessões abertas noutros dispositivos.
+async function abrirSessao(c: Ctx, u: Pick<Utilizador, "id" | "versao_sessao">) {
+  await setSignedCookie(c, COOKIE, `${u.id}:${u.versao_sessao}`, await segredoSessao(c), {
     httpOnly: true,
     secure: new URL(c.req.url).protocol === "https:",
     sameSite: "Strict",
@@ -86,7 +104,8 @@ async function abrirSessao(c: Ctx) {
   });
 }
 
-async function senhaCorreta(c: Ctx, senha: string): Promise<boolean> {
+// Instalações anteriores aos utilizadores: palavra-passe única (definida no painel ou no segredo ADMIN_PASSWORD).
+async function senhaLegadaCorreta(c: Ctx, senha: string): Promise<boolean> {
   const guardada = await lerDefinicao(c.env.DB, "senha");
   if (guardada) return verificarSenha(senha, guardada);
   if (!c.env.ADMIN_PASSWORD) return false;
@@ -94,19 +113,43 @@ async function senhaCorreta(c: Ctx, senha: string): Promise<boolean> {
   return iguais(await hash(senha), await hash(c.env.ADMIN_PASSWORD));
 }
 
-// Sem palavra-passe definida (instalação nova), o painel abre o assistente de primeiro arranque.
-async function temSenha(c: Ctx): Promise<boolean> {
-  return !!c.env.ADMIN_PASSWORD || !!(await lerDefinicao(c.env.DB, "senha"));
+type EstadoAcesso = "utilizadores" | "legado" | "nova";
+
+async function estadoAcesso(c: Ctx): Promise<EstadoAcesso> {
+  if (await contarUtilizadores(c.env.DB)) return "utilizadores";
+  return c.env.ADMIN_PASSWORD || (await lerDefinicao(c.env.DB, "senha")) ? "legado" : "nova";
 }
 
 app.get("/", (c) => c.redirect("/admin"));
 
-app.get("/login", async (c) => ((await temSenha(c)) ? c.html(paginaLogin()) : c.redirect("/configurar")));
+app.get("/login", async (c) => {
+  const estado = await estadoAcesso(c);
+  return estado === "nova" ? c.redirect("/configurar") : c.html(paginaLogin({ legado: estado === "legado" }));
+});
 
 app.post("/login", async (c) => {
-  const { password } = await c.req.parseBody<{ password: string }>();
-  if (!(await senhaCorreta(c, String(password ?? "")))) return c.html(paginaLogin("Palavra-passe errada."), 401);
-  await abrirSessao(c);
+  const b = await c.req.parseBody<Record<string, string>>();
+  const email = emailValido(b.email);
+  const senha = String(b.password ?? "");
+  const estado = await estadoAcesso(c);
+
+  if (estado === "legado") {
+    // Primeira entrada com email: a palavra-passe atual confirma a identidade e o email fica a ser o do gestor.
+    if (!email) return c.html(paginaLogin({ legado: true, erro: "Indique um email válido." }), 400);
+    if (!(await senhaLegadaCorreta(c, senha))) return c.html(paginaLogin({ legado: true, erro: "Palavra-passe errada." }), 401);
+    const id = await criarUtilizador(c.env.DB, { email, nome: null, senha, papel: "gestor" });
+    await c.env.DB.prepare("DELETE FROM definicoes WHERE chave IN ('senha', 'versao_sessao')").run();
+    const u = (await obterUtilizador(c.env.DB, id))!;
+    await abrirSessao(c, u);
+    return c.html(paginaCodigos(await gerarCodigos(c.env.DB, u.id), { primeiraVez: true }));
+  }
+
+  const u = email ? await obterPorEmail(c.env.DB, email) : null;
+  if (!u || !u.ativo || !(await verificarSenha(senha, u.senha))) {
+    return c.html(paginaLogin({ erro: "Email ou palavra-passe errados.", email: b.email }), 401);
+  }
+  await c.env.DB.prepare("UPDATE utilizadores SET ultimo_acesso = ? WHERE id = ?").bind(new Date().toISOString(), u.id).run();
+  await abrirSessao(c, u);
   return c.redirect("/admin");
 });
 
@@ -115,16 +158,37 @@ app.post("/logout", (c) => {
   return c.redirect("/login");
 });
 
-app.get("/configurar", async (c) => ((await temSenha(c)) ? c.redirect("/login") : c.html(paginaConfigurar())));
+// Assistente de primeiro arranque: só numa instalação sem utilizadores nem palavra-passe anterior.
+app.get("/configurar", async (c) => ((await estadoAcesso(c)) === "nova" ? c.html(paginaConfigurar()) : c.redirect("/login")));
 
 app.post("/configurar", async (c) => {
-  if (await temSenha(c)) return c.redirect("/login");
+  if ((await estadoAcesso(c)) !== "nova") return c.redirect("/login");
   const b = await c.req.parseBody<Record<string, string>>();
+  const email = emailValido(b.email);
+  if (!email) return c.html(paginaConfigurar("Indique um email válido."), 400);
   const erro = validarNovaSenha(b.senha, b.confirmar);
   if (erro) return c.html(paginaConfigurar(erro), 400);
-  await gravarDefinicao(c.env.DB, "senha", await hashSenha(b.senha));
-  await abrirSessao(c);
-  return c.redirect("/admin");
+  const id = await criarUtilizador(c.env.DB, { email, nome: b.nome?.trim() || null, senha: b.senha, papel: "gestor" });
+  const u = (await obterUtilizador(c.env.DB, id))!;
+  await abrirSessao(c, u);
+  return c.html(paginaCodigos(await gerarCodigos(c.env.DB, u.id), { primeiraVez: true }));
+});
+
+// Palavra-passe esquecida (gestor): com um dos códigos de recuperação. A equipa pede ao gestor.
+app.get("/recuperar", (c) => c.html(paginaRecuperar()));
+
+app.post("/recuperar", async (c) => {
+  const b = await c.req.parseBody<Record<string, string>>();
+  const email = emailValido(b.email);
+  const u = email ? await obterPorEmail(c.env.DB, email) : null;
+  const erroSenha = validarNovaSenha(b.senha, b.confirmar);
+  if (erroSenha) return c.html(paginaRecuperar(erroSenha), 400);
+  if (!u || !u.ativo || u.papel !== "gestor" || !(await usarCodigo(c.env.DB, u.id, String(b.codigo ?? "")))) {
+    return c.html(paginaRecuperar("Email ou código de recuperação inválidos."), 400);
+  }
+  await mudarSenha(c.env.DB, u.id, b.senha);
+  await abrirSessao(c, (await obterUtilizador(c.env.DB, u.id))!);
+  return c.redirect("/admin/conta?recuperado=1");
 });
 
 function validarNovaSenha(senha: string | undefined, confirmar: string | undefined): string | null {
@@ -134,12 +198,29 @@ function validarNovaSenha(senha: string | undefined, confirmar: string | undefin
 }
 
 const exigirSessao = async (c: Ctx, next: () => Promise<void>) => {
-  const sessao = await getSignedCookie(c, await segredoSessao(c), COOKIE);
-  if (!sessao || sessao !== (await valorSessao(c))) return c.redirect("/login");
+  const [id, versao] = String((await getSignedCookie(c, await segredoSessao(c), COOKIE)) || "").split(":");
+  const u = Number(id) ? await obterUtilizador(c.env.DB, Number(id)) : null;
+  if (!u || !u.ativo || u.versao_sessao !== versao) return c.redirect("/login");
+  c.set("utilizador", u);
   await next();
 };
 app.use("/admin", exigirSessao);
 app.use("/admin/*", exigirSessao);
+
+// A equipa trata das reservas; configuração, dados fiscais e documentos dos hóspedes são só do gestor.
+const soGestor = async (c: Ctx, next: () => Promise<void>) => {
+  if (c.get("utilizador").papel !== "gestor") return c.html(paginaSemAcesso(), 403);
+  await next();
+};
+for (const caminho of [
+  "/admin/alojamentos", "/admin/alojamentos/*", "/admin/instrucoes", "/admin/tmt", "/admin/tmt/*",
+  "/admin/definicoes", "/admin/definicoes/*", "/admin/utilizadores", "/admin/utilizadores/*",
+  "/admin/reservas/:id/valores", "/admin/reservas/:id/siba", "/admin/reservas/:id/fatura", "/admin/reservas/:id/cancelar",
+]) {
+  app.use(caminho, soGestor);
+}
+
+const papel = (c: Ctx): Papel => c.get("utilizador").papel;
 
 // ---------- Painel ----------
 
@@ -159,21 +240,24 @@ function alojamentoDa(mapa: MapaAlojamentos, rc: ReservaCompleta): Alojamento {
 app.get("/admin", async (c) => {
   const agora = new Date();
   const [{ reservas, alojamentos, mapa, declaracoes }, licenca] = await Promise.all([carregarTudo(c.env.DB), lerLicenca(c.env.DB)]);
-  if (!alojamentos.length) return c.redirect("/admin/alojamentos/novo");
-  const pendentes = [
+  const p = papel(c);
+  if (!alojamentos.length) return p === "gestor" ? c.redirect("/admin/alojamentos/novo") : c.html(paginaSemAcesso());
+  const todos = [
     ...reservas.flatMap((rc) => pendentesReserva(rc.reserva, rc.hospedes, rc.faturacao, configAlojamento(alojamentoDa(mapa, rc)), agora)),
     ...alojamentos.flatMap((a) =>
       pendentesTmt(mesesTmt(reservas, a.id, agora), declaracoes, { id: a.id, concelho: a.concelho, regras: regrasTmt(a) }),
     ),
   ];
-  const aviso = avisoLicenca(licenca.chave, licenca.estado, alojamentos.filter((a) => a.ativo).length, agora);
-  return c.html(paginaPainel(ordenarPendentes(pendentes), reservas, mapa, agora, aviso));
+  // A equipa só vê o que depende dela: formulários e dados de hóspedes por preencher.
+  const pendentes = p === "gestor" ? todos : todos.filter((x) => x.tipo === "formulario" || x.tipo === "dados_hospedes");
+  const aviso = p === "gestor" ? avisoLicenca(licenca.chave, licenca.estado, alojamentos.filter((a) => a.ativo).length, agora) : null;
+  return c.html(paginaPainel(ordenarPendentes(pendentes), reservas, mapa, agora, aviso, p));
 });
 
 app.get("/admin/reservas/nova", async (c) => {
   const ativos = (await listarAlojamentos(c.env.DB)).filter((a) => a.ativo);
-  if (!ativos.length) return c.redirect("/admin/alojamentos/novo");
-  return c.html(paginaNovaReserva(ativos));
+  if (!ativos.length) return papel(c) === "gestor" ? c.redirect("/admin/alojamentos/novo") : c.html(paginaSemAcesso());
+  return c.html(paginaNovaReserva(ativos, papel(c)));
 });
 
 app.post("/admin/reservas", async (c) => {
@@ -205,7 +289,7 @@ app.get("/admin/reservas/:id", async (c) => {
   // o link para o hóspede usa o endereço público, quando definido.
   const link = new URL(`/c/${rc.reserva.token}`, c.env.URL_PUBLICO || c.req.url).toString();
   const pendentes = ordenarPendentes(pendentesReserva(rc.reserva, rc.hospedes, rc.faturacao, configAlojamento(alojamento), agora));
-  return c.html(paginaReserva(rc, alojamento, link, pendentes, agora));
+  return c.html(paginaReserva(rc, alojamento, link, pendentes, agora, papel(c)));
 });
 
 app.post("/admin/reservas/:id/valores", async (c) => {
@@ -451,17 +535,112 @@ async function mostrarDefinicoes(c: Ctx, opcoes: { erro?: string; guardado?: boo
   );
 }
 
-app.get("/admin/definicoes", (c) => mostrarDefinicoes(c, { guardado: c.req.query("guardado") === "1" }));
+app.get("/admin/definicoes", (c) => mostrarDefinicoes(c));
 
-app.post("/admin/definicoes/senha", async (c) => {
+// ---------- A minha conta (todos os utilizadores) ----------
+
+async function mostrarConta(c: Ctx, opcoes: { erro?: string; ok?: string } = {}) {
+  const u = c.get("utilizador");
+  const codigos = u.papel === "gestor" ? await codigosDisponiveis(c.env.DB, u.id) : null;
+  return c.html(paginaConta(u, codigos, opcoes), opcoes.erro ? 400 : 200);
+}
+
+app.get("/admin/conta", (c) => {
+  const ok = c.req.query("recuperado") === "1"
+    ? "Palavra-passe redefinida. Esse código de recuperação já não serve: gere novos se lhe restarem poucos."
+    : c.req.query("guardado") === "1" ? "Guardado." : undefined;
+  return mostrarConta(c, { ok });
+});
+
+app.post("/admin/conta/dados", async (c) => {
+  const u = c.get("utilizador");
   const b = await c.req.parseBody<Record<string, string>>();
-  if (!(await senhaCorreta(c, String(b.atual ?? "")))) return mostrarDefinicoes(c, { erro: "A palavra-passe atual está errada." });
+  const email = emailValido(b.email);
+  if (!email) return mostrarConta(c, { erro: "Indique um email válido." });
+  const outro = await obterPorEmail(c.env.DB, email);
+  if (outro && outro.id !== u.id) return mostrarConta(c, { erro: "Esse email já pertence a outro utilizador." });
+  await c.env.DB.prepare("UPDATE utilizadores SET email = ?, nome = ? WHERE id = ?").bind(email, b.nome?.trim() || null, u.id).run();
+  return c.redirect("/admin/conta?guardado=1");
+});
+
+app.post("/admin/conta/senha", async (c) => {
+  const u = c.get("utilizador");
+  const b = await c.req.parseBody<Record<string, string>>();
+  if (!(await verificarSenha(String(b.atual ?? ""), u.senha))) return mostrarConta(c, { erro: "A palavra-passe atual está errada." });
   const erro = validarNovaSenha(b.senha, b.confirmar);
-  if (erro) return mostrarDefinicoes(c, { erro });
-  await gravarDefinicao(c.env.DB, "senha", await hashSenha(b.senha));
-  await gravarDefinicao(c.env.DB, "versao_sessao", gerarToken());
-  await abrirSessao(c);
-  return c.redirect("/admin/definicoes?guardado=1");
+  if (erro) return mostrarConta(c, { erro });
+  await mudarSenha(c.env.DB, u.id, b.senha);
+  await abrirSessao(c, (await obterUtilizador(c.env.DB, u.id))!);
+  return mostrarConta(c, { ok: "Palavra-passe alterada. As sessões noutros dispositivos foram terminadas." });
+});
+
+app.post("/admin/conta/codigos", async (c) => {
+  const u = c.get("utilizador");
+  if (u.papel !== "gestor") return c.html(paginaSemAcesso(), 403);
+  const { atual } = await c.req.parseBody<{ atual: string }>();
+  if (!(await verificarSenha(String(atual ?? ""), u.senha))) return mostrarConta(c, { erro: "A palavra-passe atual está errada." });
+  return c.html(paginaCodigos(await gerarCodigos(c.env.DB, u.id), { primeiraVez: false }));
+});
+
+// ---------- Utilizadores (gestor) ----------
+
+async function mostrarUtilizadores(c: Ctx, opcoes: { erro?: string; ok?: string } = {}) {
+  return c.html(paginaUtilizadores(await listarUtilizadores(c.env.DB), c.get("utilizador").id, opcoes), opcoes.erro ? 400 : 200);
+}
+
+app.get("/admin/utilizadores", (c) => mostrarUtilizadores(c));
+
+app.post("/admin/utilizadores", async (c) => {
+  const b = await c.req.parseBody<Record<string, string>>();
+  const email = emailValido(b.email);
+  const p = b.papel === "gestor" ? "gestor" : "equipa";
+  if (!email) return mostrarUtilizadores(c, { erro: "Indique um email válido." });
+  if (await obterPorEmail(c.env.DB, email)) return mostrarUtilizadores(c, { erro: "Já existe um utilizador com esse email." });
+  const erro = validarNovaSenha(b.senha, b.senha);
+  if (erro) return mostrarUtilizadores(c, { erro });
+  await criarUtilizador(c.env.DB, { email, nome: b.nome?.trim() || null, senha: b.senha, papel: p });
+  return mostrarUtilizadores(c, { ok: `Utilizador ${email} criado. Dê-lhe a palavra-passe e peça-lhe que a mude em "Conta".` });
+});
+
+async function outroUtilizador(c: Ctx): Promise<Utilizador | null> {
+  const u = await obterUtilizador(c.env.DB, Number(c.req.param("id")));
+  return u && u.id !== c.get("utilizador").id ? u : null; // a própria conta muda-se em "Conta"
+}
+
+app.post("/admin/utilizadores/:id/senha", async (c) => {
+  const u = await outroUtilizador(c);
+  if (!u) return c.notFound();
+  const { senha } = await c.req.parseBody<{ senha: string }>();
+  const erro = validarNovaSenha(senha, senha);
+  if (erro) return mostrarUtilizadores(c, { erro });
+  await mudarSenha(c.env.DB, u.id, senha);
+  return mostrarUtilizadores(c, { ok: `Nova palavra-passe definida para ${u.email}.` });
+});
+
+app.post("/admin/utilizadores/:id/:acao{desativar|reativar}", async (c) => {
+  const u = await outroUtilizador(c);
+  if (!u) return c.notFound();
+  const ativar = c.req.param("acao") === "reativar";
+  if (!ativar && u.papel === "gestor" && (await eUltimoGestor(c.env.DB, u.id))) {
+    return mostrarUtilizadores(c, { erro: "Não pode desativar o último gestor." });
+  }
+  // Desativar termina logo as sessões dessa pessoa.
+  await c.env.DB.prepare("UPDATE utilizadores SET ativo = ?, versao_sessao = ? WHERE id = ?")
+    .bind(ativar ? 1 : 0, novaVersaoSessao(), u.id)
+    .run();
+  return c.redirect("/admin/utilizadores");
+});
+
+app.post("/admin/utilizadores/:id/papel", async (c) => {
+  const u = await outroUtilizador(c);
+  if (!u) return c.notFound();
+  const { papel: novo } = await c.req.parseBody<{ papel: string }>();
+  if (novo !== "gestor" && novo !== "equipa") return c.text("Papel inválido.", 400);
+  if (novo === "equipa" && u.papel === "gestor" && (await eUltimoGestor(c.env.DB, u.id))) {
+    return mostrarUtilizadores(c, { erro: "Tem de haver pelo menos um gestor." });
+  }
+  await c.env.DB.prepare("UPDATE utilizadores SET papel = ? WHERE id = ?").bind(novo, u.id).run();
+  return c.redirect("/admin/utilizadores");
 });
 
 app.post("/admin/definicoes/licenca", async (c) => {

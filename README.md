@@ -12,8 +12,11 @@ Ver [docs/PRODUTO.md](docs/PRODUTO.md) (plano de produto) e
 
 - **Vários alojamentos** por gestor, cada um com código do cofre, hora de check-in,
   instruções de chegada e regras da taxa turística do seu concelho.
-- **Configuração no painel**: na primeira visita, um assistente pede a palavra-passe
-  e o primeiro alojamento.
+- **Configuração no painel**: na primeira visita, um assistente cria a conta de gestor
+  (email e palavra-passe) e o primeiro alojamento.
+- **Utilizadores**: gestores (acesso total) e equipa (reservas e link de check-in, sem
+  documentos dos hóspedes, dados de faturação nem configuração). Palavra-passe esquecida:
+  códigos de recuperação do gestor; a equipa pede ao gestor.
 - **Painel de pendentes** ordenado por prazo: formulários por preencher, dados de
   hóspedes em falta, SIBA (3 dias úteis), fatura-recibo (5 dias úteis),
   declaração e pagamento mensal da taxa turística, divergências com o Booking.
@@ -54,9 +57,9 @@ npx wrangler deploy
 ```
 
 Depois abrir `https://<nome>.workers.dev/admin` no telemóvel, escolher a
-palavra-passe e criar o primeiro alojamento, e "Adicionar ao ecrã principal".
-⚠️ Até a palavra-passe ser escolhida, quem abrir o endereço primeiro pode fazê-lo:
-configure-a logo após publicar.
+conta de gestor e criar o primeiro alojamento, e "Adicionar ao ecrã principal".
+⚠️ Até a conta de gestor ser criada, quem abrir o endereço primeiro pode fazê-lo:
+crie-a logo após publicar.
 
 ## Desenvolvimento
 

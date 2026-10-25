@@ -92,6 +92,13 @@ Código em `plataforma/`; passos de configuração em [PLATAFORMA.md](PLATAFORMA
 - [ ] Mudar o DNS do bookgest.pt para o Cloudflare e ligar o domínio à plataforma
   (sai do proxy Hetzner).
 
+### Entre fases — Utilizadores (feito)
+- [x] Entrada com email e palavra-passe; vários utilizadores com os papéis gestor e equipa.
+- [x] Recuperação com códigos de recuperação (gestor); a equipa pede ao gestor.
+- [ ] Recuperação por email: precisa de envio de email. O envio pelo Cloudflare exige um
+  domínio do gestor no Cloudflare; a alternativa (envio pela plataforma) daria ao
+  fornecedor acesso ao link de recuperação. Decidir antes da Fase 3.
+
 ### Fase 3 — Instalador e atualização automática
 - Assistente passo a passo (com capturas) para criar a conta Cloudflare e a chave.
 - Publicação inicial a partir do bookgest.pt; a chave fica como segredo na conta
@@ -99,7 +106,7 @@ Código em `plataforma/`; passos de configuração em [PLATAFORMA.md](PLATAFORMA
 - Servidor de versões (versões assinadas).
 - Bloqueio de novos links de check-in com licença inativa ou alojamentos a mais
   (depois de um período de aviso).
-- O instalador define a palavra-passe inicial (fecha a janela em que o assistente
+- O instalador cria a conta de gestor (fecha a janela em que o assistente
   de primeiro arranque está aberto a quem chegar primeiro).
 - Atualização diária: verificar assinatura, aplicar migrações, publicar.
 
