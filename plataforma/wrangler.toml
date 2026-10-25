@@ -33,7 +33,7 @@ CF_SUBDOMINIO = "filipebmp"
 # Instalações alojadas em <nome>.bookgest.pt (as existentes mudam na tarefa horária). Vazio = workers.dev.
 DOMINIO_ALOJADAS = "bookgest.pt"
 # Id da zona bookgest.pt (vazio = procurado pela API; precisa da permissão Zone:Read na chave)
-ZONA_ID = ""
+ZONA_ID = "c67a66345d356160d3badf42ed7ebee0"
 # "sim" para mostrar o botão de compra (exige também STRIPE_PRECO e STRIPE_SECRET_KEY)
 VENDAS_ABERTAS = "sim"
 # Id do preço mensal por alojamento no Stripe (price_…), com IVA incluído
