@@ -1,29 +1,63 @@
-import { html } from "hono/html";
+import { html, raw } from "hono/html";
 import type { HtmlEscapedString } from "hono/utils/html";
 import { estadoLicenca, type Cliente, type Licenca } from "./licencas";
 import type { Fatura } from "./faturas";
 
 type Conteudo = HtmlEscapedString | Promise<HtmlEscapedString>;
 
-export function pagina(titulo: string, corpo: Conteudo, opcoes: { gestao?: boolean; descricao?: string; portal?: string | null } = {}) {
+// Ícones de traço (24×24), os mesmos do painel.
+const ICONES = {
+  casa: '<path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/>',
+  telemovel: '<rect x="6" y="2" width="12" height="20" rx="2.5"/><path d="M11 18h2"/>',
+  chave: '<circle cx="8" cy="15" r="4"/><path d="M11 12l9-9M17 6l3 3M15 8l2 2"/>',
+  calendario: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
+  email: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/>',
+  escudo: '<path d="M12 3l8 3v6c0 4.5-3.4 8.3-8 9-4.6-.7-8-4.5-8-9V6z"/>',
+  recibo: '<path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6"/>',
+  moeda: '<circle cx="12" cy="12" r="9"/><path d="M15.5 8.5a4 4 0 1 0 0 7M7 11h6M7 13.5h6"/>',
+  predios: '<path d="M4 21V8l8-5 8 5v13"/><path d="M9 21v-6h6v6"/>',
+  pessoa: '<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
+  cadeado: '<rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
+  visto: '<path d="M5 12l5 5 9-10"/>',
+} as const;
+
+export function icone(nome: keyof typeof ICONES, tamanho = 22) {
+  return raw(`<svg class="icone" width="${tamanho}" height="${tamanho}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONES[nome]}</svg>`);
+}
+
+// estreito: páginas de formulário (registo, entrar, instalar).
+export function pagina(
+  titulo: string,
+  corpo: Conteudo,
+  opcoes: { gestao?: boolean; descricao?: string; portal?: string | null; estreito?: boolean; experimentar?: boolean; contacto?: string | null } = {},
+) {
   return html`<!doctype html>
 <html lang="pt">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#0f5c4d">
+  <meta name="theme-color" content="#f5f6f3" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#111513" media="(prefers-color-scheme: dark)">
   <title>${titulo}</title>
   ${opcoes.descricao ? html`<meta name="description" content="${opcoes.descricao}">` : ""}
   ${opcoes.gestao ? html`<meta name="robots" content="noindex">` : ""}
   <link rel="icon" href="/icon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="/site.css">
+  <link rel="stylesheet" href="/site.css?v=2">
 </head>
 <body>
-  <header><a href="${opcoes.gestao ? "/gestao" : "/"}" class="marca">🏠 bookgest${opcoes.gestao ? " · gestão" : ""}</a>
+  <header class="topo"><div class="topo-dentro">
+    <a href="${opcoes.gestao ? "/gestao" : "/"}" class="marca"><span class="logo">${icone("casa", 17)}</span>bookgest${opcoes.gestao ? html` <small>· gestão</small>` : ""}</a>
     ${opcoes.gestao
       ? html`<nav><a href="/gestao">Licenças</a><a href="/gestao/faturas">Faturas</a></nav>`
-      : html`<nav><a href="/#precos">Preços</a>${opcoes.portal ? html`<a href="${opcoes.portal}">Assinatura</a>` : ""}<a href="/entrar">Entrar</a></nav>`}</header>
-  <main>${corpo}</main>
+      : html`<nav><a class="opcional" href="/#funcionalidades">Funcionalidades</a><a class="opcional" href="/#precos">Preço</a>
+          ${opcoes.portal ? html`<a class="opcional" href="${opcoes.portal}">Assinatura</a>` : ""}<a href="/entrar">Entrar</a>
+          ${opcoes.experimentar ? html`<a class="botao" href="/registar">Experimentar</a>` : ""}</nav>`}
+  </div></header>
+  <main class="${opcoes.estreito ? "estreito" : ""}">${corpo}</main>
+  ${opcoes.gestao
+    ? ""
+    : html`<footer class="rodape"><div><span>© bookgest</span><a href="/termos">Termos e dados</a>
+        ${opcoes.contacto ? html`<a href="mailto:${opcoes.contacto}">${opcoes.contacto}</a>` : ""}</div></footer>`}
 </body>
 </html>`;
 }
@@ -46,67 +80,132 @@ export interface DadosSite {
   portal: string | null; // link de acesso ao portal do cliente do Stripe
 }
 
-const FUNCIONALIDADES = [
-  ["Check-in online", "O hóspede preenche os dados no telemóvel, em português ou inglês, antes de chegar."],
-  ["Código do cofre no momento certo", "O código das chaves só aparece depois do formulário preenchido e perto da hora de entrada, com as suas fotos de como chegar."],
-  ["Prazos sempre à vista", "Comunicação ao SIBA, fatura-recibo e taxa turística: um painel ordenado pelo que vence primeiro."],
-  ["Taxa turística calculada", "Calcula o valor devido por estadia e o resumo mensal para declarar à câmara, e avisa se o Booking cobrou mal."],
-  ["Vários alojamentos", "Cada alojamento com o seu código, horários, instruções e regras do concelho."],
-  ["No bolso", "Funciona no telemóvel como uma app, sem instalar nada da loja."],
+const FUNCIONALIDADES: [Parameters<typeof icone>[0], string, string][] = [
+  ["telemovel", "Check-in online", "O hóspede preenche os dados no telemóvel, em português ou inglês, antes de chegar. Envia o link por WhatsApp num toque."],
+  ["chave", "Código das chaves no momento certo", "O código do cofre só aparece depois do formulário preenchido e perto da hora de entrada, com as suas fotos de como chegar."],
+  ["calendario", "Reservas do Booking e do Airbnb", "Ligue o calendário de cada plataforma e as reservas entram sozinhas, num calendário com todos os alojamentos."],
+  ["email", "Emails de reserva", "Reencaminhe os emails de confirmação e o bookgest completa o nome, os hóspedes e os valores de cada reserva."],
+  ["escudo", "SIBA e fatura-recibo", "Avisa quando tem de comunicar hóspedes estrangeiros e emitir a fatura, com os dados já reunidos e o prazo à vista."],
+  ["moeda", "Taxa turística calculada", "Valor devido por estadia e resumo mensal para declarar à câmara, com as regras do seu concelho. Avisa se o Booking cobrou mal."],
+  ["predios", "Vários alojamentos", "Cada alojamento com o seu código, horários, instruções e regras. Números do mês: ocupação e receita."],
+  ["pessoa", "Equipa", "Dê acesso a quem faz as limpezas ou recebe os hóspedes, sem mostrar documentos, faturação ou valores."],
 ];
 
+// Ecrã "Hoje" do painel, com dados de exemplo, desenhado em HTML para ficar nítido em qualquer ecrã.
+const TELEMOVEL = html`<div class="telemovel" role="img" aria-label="O ecrã Hoje do bookgest num telemóvel: entradas, saídas, ocupação, tarefas e próximas chegadas">
+  <div class="ecra" aria-hidden="true">
+    <p class="data">domingo, 25 de outubro</p>
+    <p class="titulo">Hoje</p>
+    <div class="nums"><div><span>Entradas</span><b>2</b></div><div><span>Saídas</span><b>1</b></div><div><span>Ocupação</span><b>78%</b></div></div>
+    <h4>A tratar</h4>
+    <div class="lista">
+      <div><span class="ic a">${icone("recibo", 13)}</span><p><b>Emitir fatura-recibo</b><span>John Smith</span></p><span class="et a">Atrasado</span></div>
+      <div><span class="ic h">${icone("escudo", 13)}</span><p><b>Comunicar ao SIBA</b><span>Hans Müller · 2 hóspedes</span></p><span class="et h">Hoje</span></div>
+      <div><span class="ic">${icone("moeda", 13)}</span><p><b>Declarar taxa turística</b><span>Setembro · Lisboa</span></p><span class="et">31/10</span></div>
+    </div>
+    <h4>Entradas e saídas</h4>
+    <div class="lista">
+      <div><span class="dia"><b>25</b><span>out</span></span><p><b>Hans Müller</b><span>Casa da Praia · 3 noites</span></p><span class="et b">Booking</span></div>
+      <div><span class="dia"><b>27</b><span>out</span></span><p><b>Maria Silva</b><span>T1 Centro · 2 noites</span></p><span class="et r">Airbnb</span></div>
+    </div>
+    <div class="menu"><span>Hoje</span><span>Calendário</span><span>Reservas</span><span>Taxas</span><span>Mais</span></div>
+  </div>
+</div>`;
+
 export function paginaInicio(d: DadosSite) {
+  const comecar = d.registosAbertos
+    ? html`<a class="botao grande" href="/registar">Experimentar 30 dias grátis</a>`
+    : d.contacto
+      ? html`<a class="botao grande" href="mailto:${d.contacto}?subject=bookgest">Pedir para experimentar</a>`
+      : html`<a class="botao grande" href="#precos">Ver preço</a>`;
   return pagina("bookgest — gestão de Alojamento Local", html`
-    <section class="destaque">
-      <h1>O seu Alojamento Local em ordem, sem papelada.</h1>
-      <p>Check-in online, entrega do código das chaves e todos os prazos legais num só sítio —
-        feito para quem gere um ou poucos alojamentos.</p>
-      ${d.registosAbertos
-        ? html`<a class="botao grande" href="/registar">Experimentar 30 dias grátis</a>
-            <p class="nota">Sem cartão. Pronto a usar num minuto.</p>`
-        : html`<a class="botao grande" href="#precos">Ver preço</a>`}
+    <section class="heroi">
+      <div>
+        <span class="selo">${icone("casa", 15)}Para quem gere um ou poucos Alojamentos Locais</span>
+        <h1>O seu Alojamento Local em ordem, sem papelada.</h1>
+        <p class="lead">Check-in online, código das chaves, reservas do Booking e do Airbnb e todos os prazos legais —
+          SIBA, fatura e taxa turística — num só sítio, no telemóvel.</p>
+        <div class="botoes">${comecar}<a class="botao grande secundario" href="#funcionalidades">Ver como funciona</a></div>
+        ${d.registosAbertos ? html`<p class="nota">Sem cartão. Pronto a usar num minuto.</p>` : ""}
+        <p class="plataformas">Funciona com <b>Booking.com</b> · <b>Airbnb</b> · reservas diretas</p>
+      </div>
+      ${TELEMOVEL}
     </section>
 
-    <section class="grelha">
-      ${FUNCIONALIDADES.map(([t, d]) => html`<div class="cartao"><h3>${t}</h3><p>${d}</p></div>`)}
+    <section class="seccao" id="funcionalidades">
+      <h2>Tudo o que um Alojamento Local pede</h2>
+      <p class="lead">Do momento em que a reserva entra até à declaração da taxa turística.</p>
+      <div class="grelha">
+        ${FUNCIONALIDADES.map(([i, t, x]) => html`<div class="cartao funcao"><span class="simbolo">${icone(i)}</span><h3>${t}</h3><p>${x}</p></div>`)}
+      </div>
     </section>
 
-    <section class="cartao privacidade">
-      <h2>🔒 Os dados dos seus hóspedes, protegidos</h2>
-      <p><strong>Simples:</strong> registe-se e comece já. Cada cliente tem a sua própria base de dados, separada das
-        outras; tratamos os dados apenas por sua conta e não os consultamos.</p>
-      <p><strong>Privado:</strong> prefere que ninguém além de si tenha acesso? Instalamos o bookgest numa conta
-        Cloudflare <strong>em seu nome</strong> (gratuita): os dados ficam lá e nós não temos acesso a eles.</p>
+    <section class="seccao">
+      <h2>Como funciona</h2>
+      <p class="lead">Sem instalar nada da loja de aplicações: abre no browser e fica no ecrã principal como uma app.</p>
+      <ol class="passos">
+        <li><h3>Crie o seu bookgest</h3><p>Escolha o endereço (ex.: casa-da-praia.bookgest.pt) e configure o alojamento, o código do cofre e as regras do concelho.</p></li>
+        <li><h3>Ligue as reservas</h3><p>Cole o link do calendário do Booking e do Airbnb e reencaminhe os emails de reserva. As reservas aparecem sozinhas.</p></li>
+        <li><h3>Envie o link ao hóspede</h3><p>O hóspede faz o check-in no telemóvel e recebe o código das chaves. O bookgest avisa-o do que falta tratar.</p></li>
+      </ol>
     </section>
 
-    <section id="precos" class="cartao precos">
-      <h2>Preço</h2>
-      ${d.precoCents != null
-        ? html`<p class="preco"><strong>${euros(d.precoCents)}</strong> por alojamento, por mês<br><small>IVA incluído · sem fidelização</small></p>`
-        : html`<p class="preco">Preço em breve.</p>`}
-      ${d.vendasAbertas && d.precoCents != null
-        ? html`<form method="post" action="/comprar" class="linha">
-            <label>Alojamentos <input type="number" name="alojamentos" min="1" max="50" value="1" required></label>
-            <button type="submit">Começar</button>
-          </form>
-          <p class="nota">Pagamento seguro pelo Stripe. Pode alterar o número de alojamentos ou cancelar a qualquer momento.</p>`
-        : html`<p>Estamos a abrir aos primeiros gestores.
-            ${d.contacto ? html`<a href="mailto:${d.contacto}?subject=bookgest">Peça para experimentar</a>.` : ""}</p>`}
+    <section class="seccao">
+      <h2>Os dados dos seus hóspedes, protegidos</h2>
+      <p class="lead">Escolha onde ficam os dados.</p>
+      <div class="privacidade">
+        <div class="cartao"><span class="passo">Simples</span><h3 style="margin-top: 10px">Alojado pelo bookgest</h3>
+          <p class="nota">Registe-se e comece já. Cada cliente tem a sua própria base de dados, separada das outras;
+            tratamos os dados apenas por sua conta e não os consultamos.</p></div>
+        <div class="cartao"><span class="passo">Privado</span><h3 style="margin-top: 10px">Na sua conta Cloudflare</h3>
+          <p class="nota">Prefere que ninguém além de si tenha acesso? Instalamos o bookgest numa conta Cloudflare
+            em seu nome (gratuita): os dados ficam lá e nós não temos acesso a eles.</p></div>
+      </div>
     </section>
 
-    <section>
+    <section class="seccao" id="precos">
+      <div class="cartao precos">
+        <h2 style="margin: 0">Preço simples</h2>
+        ${d.precoCents != null
+          ? html`<p class="valor">${euros(d.precoCents)}</p><p class="nota" style="margin: 0">por alojamento, por mês · IVA incluído · sem fidelização</p>`
+          : html`<p class="valor">Em breve</p>`}
+        <ul>
+          ${["Todas as funcionalidades, sem extras", "Atualizações automáticas", "30 dias para experimentar", "Os seus dados sempre acessíveis, mesmo que deixe de pagar"]
+            .map((t) => html`<li>${icone("visto", 18)}${t}</li>`)}
+        </ul>
+        ${d.vendasAbertas && d.precoCents != null
+          ? html`<form method="post" action="/comprar" class="linha">
+              <label>Alojamentos <input type="number" name="alojamentos" min="1" max="50" value="1" required></label>
+              <button type="submit">Subscrever</button>
+            </form>
+            <p class="nota">Pagamento seguro pelo Stripe. Pode alterar o número de alojamentos ou cancelar a qualquer momento.</p>`
+          : html`<p>Estamos a abrir aos primeiros gestores.
+              ${d.contacto ? html`<a href="mailto:${d.contacto}?subject=bookgest">Peça para experimentar</a>.` : ""}</p>`}
+        ${d.registosAbertos ? html`<p><a href="/registar">Ou experimente 30 dias grátis, sem cartão</a></p>` : ""}
+      </div>
+    </section>
+
+    <section class="seccao faq">
       <h2>Perguntas frequentes</h2>
       <details><summary>Preciso de conhecimentos técnicos?</summary>
         <p>Não. No modo Simples basta registar-se. O modo Privado tem um instalador passo a passo (cerca de 10 minutos).</p></details>
+      <details><summary>Funciona com o Booking e o Airbnb?</summary>
+        <p>Sim. As reservas entram sozinhas pelo calendário (iCal) de cada plataforma, e os emails de reserva reencaminhados
+          completam o nome, os hóspedes e os valores. Também pode criar reservas à mão em segundos.</p></details>
+      <details><summary>O bookgest comunica ao SIBA e emite as faturas por mim?</summary>
+        <p>Ainda não: reúne os dados, calcula o que é preciso e avisa dos prazos; a comunicação e a fatura são feitas nos
+          sistemas oficiais e no seu programa de faturação certificado.</p></details>
       <details><summary>Quanto custa a conta Cloudflare do modo Privado?</summary>
         <p>Nada: o plano gratuito chega para um pequeno gestor de Alojamento Local.</p></details>
       <details><summary>E se deixar de pagar?</summary>
         <p>Continua a poder consultar todos os seus dados — a lei obriga-o a guardá-los e nós nunca os bloqueamos.</p></details>
-      <details><summary>Funciona com o Booking e o Airbnb?</summary>
-        <p>Sim: regista cada reserva em segundos e envia o link de check-in ao hóspede por WhatsApp ou mensagem.</p></details>
     </section>
-    ${d.contacto ? html`<footer>Contacto: <a href="mailto:${d.contacto}">${d.contacto}</a></footer>` : ""}
-  `, { portal: d.portal, descricao: "Check-in online, código das chaves e prazos legais (SIBA, fatura, taxa turística) para pequenos gestores de Alojamento Local." });
+  `, {
+    portal: d.portal,
+    experimentar: d.registosAbertos,
+    contacto: d.contacto,
+    descricao: "Check-in online, código das chaves, reservas do Booking e do Airbnb e prazos legais (SIBA, fatura, taxa turística) para pequenos gestores de Alojamento Local.",
+  });
 }
 
 export function paginaObrigado(chave: string | null, contacto: string | null, portal: string | null, instalacao: string | null = null) {
@@ -121,11 +220,11 @@ export function paginaObrigado(chave: string | null, contacto: string | null, po
               <a href="/instalar?chave=${encodeURIComponent(chave)}">instalar numa conta Cloudflare sua</a>.</p>`}`
       : html`<p>Estamos a confirmar o pagamento. Atualize esta página dentro de alguns segundos.</p>`}
     ${portal ? html`<p class="nota">Para alterar o número de alojamentos, o método de pagamento ou cancelar: <a href="${portal}">A minha assinatura</a>.</p>` : ""}
-    ${contacto ? html`<p class="nota">Dúvidas: <a href="mailto:${contacto}">${contacto}</a></p>` : ""}`, { portal });
+    ${contacto ? html`<p class="nota">Dúvidas: <a href="mailto:${contacto}">${contacto}</a></p>` : ""}`, { portal, estreito: true, contacto });
 }
 
 export function paginaMensagem(titulo: string, texto: string) {
-  return pagina(titulo, html`<h1>${titulo}</h1><p>${texto}</p><p><a href="/">Voltar</a></p>`);
+  return pagina(titulo, html`<h1>${titulo}</h1><p>${texto}</p><p><a href="/">Voltar</a></p>`, { estreito: true });
 }
 
 // ---------- Gestão (fornecedor) ----------
@@ -136,7 +235,7 @@ export function paginaEntrar(erro?: string) {
     <form method="post" action="/gestao/entrar">
       <label>Palavra-passe <input type="password" name="password" required autofocus></label>
       <button type="submit">Entrar</button>
-    </form>`, { gestao: true });
+    </form>`, { gestao: true, estreito: true });
 }
 
 const NOMES_ESTADO = { ativa: "ativa", pagamento_em_atraso: "pagamento em atraso", inativa: "inativa", desconhecida: "desconhecida" };
