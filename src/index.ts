@@ -32,6 +32,7 @@ type Env = {
   HORAS_ANTES_CODIGO: string;
   HORA_CHECKIN: string;
   HORAS_PRAZO_HOSPEDES: string;
+  URL_PUBLICO?: string;
 };
 
 const COOKIE = "sessao";
@@ -124,7 +125,9 @@ app.get("/admin/reservas/:id", async (c) => {
   const rc = await obterReserva(c.env.DB, Number(c.req.param("id")));
   if (!rc) return c.notFound();
   const agora = new Date();
-  const link = new URL(`/c/${rc.reserva.token}`, c.req.url).toString();
+  // Atrás do porteiro (bookgest.pt → workers.dev) o pedido chega com o endereço do workers.dev:
+  // o link para o hóspede usa o endereço público, quando definido.
+  const link = new URL(`/c/${rc.reserva.token}`, c.env.URL_PUBLICO || c.req.url).toString();
   const pendentes = ordenarPendentes(pendentesReserva(rc.reserva, rc.hospedes, rc.faturacao, config(c.env), agora));
   return c.html(paginaReserva(rc, link, pendentes, agora));
 });

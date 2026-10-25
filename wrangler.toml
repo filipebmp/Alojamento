@@ -18,6 +18,8 @@ HORAS_ANTES_CODIGO = "24"
 HORA_CHECKIN = "15:00"
 # Horas após o check-in para os restantes hóspedes preencherem os dados
 HORAS_PRAZO_HOSPEDES = "48"
+# Endereço público da app, usado nos links de check-in enviados aos hóspedes
+URL_PUBLICO = "https://bookgest.pt"
 
 # Segredos (definir com `wrangler secret put NOME`, ou em .dev.vars localmente):
 #   ADMIN_PASSWORD  - palavra-passe de acesso ao painel
