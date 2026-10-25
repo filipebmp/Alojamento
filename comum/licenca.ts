@@ -25,3 +25,34 @@ export function pedidoValido(p: unknown): p is PedidoLicenca {
     Number.isInteger(x.alojamentos) && x.alojamentos >= 0 && x.alojamentos <= 10_000
   );
 }
+
+// ---------- Email de recuperação (enviado pela plataforma em nome da instalação) ----------
+// A plataforma só envia links para /recuperar/<token> e o link só funciona no browser onde a
+// recuperação foi pedida (segunda parte secreta num cookie): quem envia o email não o consegue usar.
+
+export const CAMINHO_API_EMAIL_RECUPERACAO = "/api/v1/email/recuperacao";
+
+export interface PedidoEmailRecuperacao {
+  chave: string;
+  para: string;
+  link: string;
+}
+
+export function linkRecuperacaoValido(link: string): boolean {
+  try {
+    const u = new URL(link);
+    return (u.protocol === "https:" || u.hostname === "localhost") && /^\/recuperar\/[A-Za-z0-9_-]{32,}$/.test(u.pathname) && !u.search && !u.hash;
+  } catch {
+    return false;
+  }
+}
+
+export function pedidoEmailValido(p: unknown): p is PedidoEmailRecuperacao {
+  const x = p as PedidoEmailRecuperacao;
+  return (
+    typeof x === "object" && x !== null &&
+    typeof x.chave === "string" && /^[A-Za-z0-9-]{8,64}$/.test(x.chave) &&
+    typeof x.para === "string" && x.para.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(x.para) &&
+    typeof x.link === "string" && x.link.length <= 512 && linkRecuperacaoValido(x.link)
+  );
+}

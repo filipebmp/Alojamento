@@ -110,3 +110,50 @@ export async function usarCodigo(db: D1Database, utilizadorId: number, codigo: s
     .run();
   return res.meta.changes > 0;
 }
+
+// ---------- Recuperação por email ----------
+
+const VALIDADE_MS = 3_600_000;
+export const MAX_PEDIDOS_HORA = 3;
+
+const aleatorio = (n: number) =>
+  btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(n)))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+
+async function sha256(s: string): Promise<string> {
+  const d = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s));
+  return [...new Uint8Array(d)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+// Devolve o token (vai no link do email) e o segredo do browser (vai num cookie), ou null se houver pedidos a mais.
+export async function criarPedidoRecuperacao(db: D1Database, utilizadorId: number, agora = new Date()) {
+  const recentes = await db.prepare("SELECT COUNT(*) AS n FROM pedidos_recuperacao WHERE utilizador_id = ? AND criado_em > ?")
+    .bind(utilizadorId, new Date(agora.getTime() - VALIDADE_MS).toISOString())
+    .first<number>("n");
+  if ((recentes ?? 0) >= MAX_PEDIDOS_HORA) return null;
+  const token = aleatorio(32);
+  const navegador = aleatorio(32);
+  await db.prepare(
+    "INSERT INTO pedidos_recuperacao (utilizador_id, token_hash, navegador_hash, criado_em, expira_em) VALUES (?, ?, ?, ?, ?)",
+  )
+    .bind(utilizadorId, await sha256(token), await sha256(navegador), agora.toISOString(), new Date(agora.getTime() + VALIDADE_MS).toISOString())
+    .run();
+  return { token, navegador };
+}
+
+export type ResultadoPedido = { id: number; utilizadorId: number } | "invalido" | "outro_navegador";
+
+// Valida o link: existe, não expirou, não foi usado e é aberto no browser que fez o pedido.
+export async function validarPedidoRecuperacao(db: D1Database, token: string, navegador: string | undefined, agora = new Date()): Promise<ResultadoPedido> {
+  const p = await db.prepare("SELECT id, utilizador_id, navegador_hash, expira_em, usado_em FROM pedidos_recuperacao WHERE token_hash = ?")
+    .bind(await sha256(token))
+    .first<{ id: number; utilizador_id: number; navegador_hash: string; expira_em: string; usado_em: string | null }>();
+  if (!p || p.usado_em || p.expira_em <= agora.toISOString()) return "invalido";
+  if (!navegador || (await sha256(navegador)) !== p.navegador_hash) return "outro_navegador";
+  return { id: p.id, utilizadorId: p.utilizador_id };
+}
+
+// Marca como usado (a condição evita que o mesmo link sirva duas vezes em pedidos simultâneos).
+export async function usarPedidoRecuperacao(db: D1Database, id: number): Promise<boolean> {
+  const r = await db.prepare("UPDATE pedidos_recuperacao SET usado_em = ? WHERE id = ? AND usado_em IS NULL").bind(new Date().toISOString(), id).run();
+  return r.meta.changes > 0;
+}

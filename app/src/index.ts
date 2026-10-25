@@ -1,5 +1,5 @@
 import { type Context, Hono } from "hono";
-import { deleteCookie, getSignedCookie, setSignedCookie } from "hono/cookie";
+import { deleteCookie, getCookie, getSignedCookie, setCookie, setSignedCookie } from "hono/cookie";
 import {
   type ReservaCompleta,
   definicaoInicial,
@@ -18,7 +18,7 @@ import {
 } from "./db";
 import { configAlojamento, regrasTmt } from "./lib/concelhos";
 import { hojeLisboa } from "./lib/datas";
-import { type EstadoGuardado, URL_LICENCAS_PREDEFINIDO, avisoLicenca, consultarLicenca } from "./lib/licenca";
+import { type EstadoGuardado, URL_LICENCAS_PREDEFINIDO, avisoLicenca, consultarLicenca, pedirEmailRecuperacao } from "./lib/licenca";
 import { estadoCodigo, mesesAteAnterior, ordenarPendentes, pendentesReserva, pendentesTmt } from "./lib/regras";
 import { SENHA_MINIMA, iguais, verificarSenha } from "../../comum/senha";
 import { calcularTmt, cobraTmt } from "./lib/tmt";
@@ -28,6 +28,7 @@ import {
   type Utilizador,
   codigosDisponiveis,
   contarUtilizadores,
+  criarPedidoRecuperacao,
   criarUtilizador,
   emailValido,
   eUltimoGestor,
@@ -38,6 +39,8 @@ import {
   obterPorEmail,
   obterUtilizador,
   usarCodigo,
+  usarPedidoRecuperacao,
+  validarPedidoRecuperacao,
 } from "./lib/utilizadores";
 import {
   type ResumoMesTmt,
@@ -50,6 +53,7 @@ import {
   paginaInstrucoes,
   paginaLogin,
   paginaNovaReserva,
+  paginaNovaSenhaEmail,
   paginaPainel,
   paginaRecuperar,
   paginaReserva,
@@ -174,17 +178,76 @@ app.post("/configurar", async (c) => {
   return c.html(paginaCodigos(await gerarCodigos(c.env.DB, u.id), { primeiraVez: true }));
 });
 
-// Palavra-passe esquecida (gestor): com um dos códigos de recuperação. A equipa pede ao gestor.
+// Palavra-passe esquecida: link por email (todos os utilizadores) ou código de recuperação (gestor).
 app.get("/recuperar", (c) => c.html(paginaRecuperar()));
+
+const COOKIE_RECUPERACAO = "recuperacao";
+
+app.post("/recuperar/email", async (c) => {
+  const b = await c.req.parseBody<Record<string, string>>();
+  const email = emailValido(b.email);
+  if (!email) return c.html(paginaRecuperar({ erroEmail: "Indique um email válido." }), 400);
+  const chave = await lerDefinicao(c.env.DB, "licenca_chave");
+  if (!chave) {
+    return c.html(paginaRecuperar({ erroEmail: "O envio por email precisa da chave de licença (Definições). Use um código de recuperação ou peça a um gestor." }), 503);
+  }
+  const u = await obterPorEmail(c.env.DB, email);
+  // Sem utilizador ativo, a resposta é a mesma: a página não revela que emails existem.
+  if (u?.ativo) {
+    const pedido = await criarPedidoRecuperacao(c.env.DB, u.id);
+    if (!pedido) return c.html(paginaRecuperar({ erroEmail: "Já pediu vários links na última hora. Use o mais recente ou tente mais tarde." }), 429);
+    const link = new URL(`/recuperar/${pedido.token}`, c.env.URL_PUBLICO || c.req.url).toString();
+    try {
+      await pedirEmailRecuperacao(c.env.URL_LICENCAS || URL_LICENCAS_PREDEFINIDO, { chave, para: u.email, link }, c.env.PLATAFORMA);
+    } catch (e) {
+      console.error("Email de recuperação falhou", e);
+      return c.html(paginaRecuperar({ erroEmail: `Não foi possível enviar o email (${e instanceof Error ? e.message : e}). Use um código de recuperação ou peça a um gestor.` }), 502);
+    }
+    // A segunda parte do link fica só neste browser (Lax: o cookie acompanha a abertura do link a partir do email).
+    setCookie(c, COOKIE_RECUPERACAO, pedido.navegador, {
+      httpOnly: true,
+      secure: new URL(c.req.url).protocol === "https:",
+      sameSite: "Lax",
+      path: "/recuperar",
+      maxAge: 3600,
+    });
+  }
+  return c.html(paginaRecuperar({ enviado: true }));
+});
+
+async function pedidoDoLink(c: Ctx) {
+  return validarPedidoRecuperacao(c.env.DB, c.req.param("token")!, getCookie(c, COOKIE_RECUPERACAO));
+}
+
+app.get("/recuperar/:token{[A-Za-z0-9_-]{32,}}", async (c) => {
+  c.header("Referrer-Policy", "no-referrer");
+  const p = await pedidoDoLink(c);
+  return typeof p === "string" ? c.html(paginaNovaSenhaEmail(c.req.param("token"), p), 400) : c.html(paginaNovaSenhaEmail(c.req.param("token")));
+});
+
+app.post("/recuperar/:token{[A-Za-z0-9_-]{32,}}", async (c) => {
+  const token = c.req.param("token");
+  const p = await pedidoDoLink(c);
+  if (typeof p === "string") return c.html(paginaNovaSenhaEmail(token, p), 400);
+  const b = await c.req.parseBody<Record<string, string>>();
+  const erro = validarNovaSenha(b.senha, b.confirmar);
+  if (erro) return c.html(paginaNovaSenhaEmail(token, undefined, erro), 400);
+  const u = await obterUtilizador(c.env.DB, p.utilizadorId);
+  if (!u?.ativo || !(await usarPedidoRecuperacao(c.env.DB, p.id))) return c.html(paginaNovaSenhaEmail(token, "invalido"), 400);
+  await mudarSenha(c.env.DB, u.id, b.senha);
+  deleteCookie(c, COOKIE_RECUPERACAO, { path: "/recuperar" });
+  await abrirSessao(c, (await obterUtilizador(c.env.DB, u.id))!);
+  return c.redirect("/admin/conta?recuperado=email");
+});
 
 app.post("/recuperar", async (c) => {
   const b = await c.req.parseBody<Record<string, string>>();
   const email = emailValido(b.email);
   const u = email ? await obterPorEmail(c.env.DB, email) : null;
   const erroSenha = validarNovaSenha(b.senha, b.confirmar);
-  if (erroSenha) return c.html(paginaRecuperar(erroSenha), 400);
+  if (erroSenha) return c.html(paginaRecuperar({ erroCodigo: erroSenha }), 400);
   if (!u || !u.ativo || u.papel !== "gestor" || !(await usarCodigo(c.env.DB, u.id, String(b.codigo ?? "")))) {
-    return c.html(paginaRecuperar("Email ou código de recuperação inválidos."), 400);
+    return c.html(paginaRecuperar({ erroCodigo: "Email ou código de recuperação inválidos." }), 400);
   }
   await mudarSenha(c.env.DB, u.id, b.senha);
   await abrirSessao(c, (await obterUtilizador(c.env.DB, u.id))!);
@@ -546,8 +609,10 @@ async function mostrarConta(c: Ctx, opcoes: { erro?: string; ok?: string } = {})
 }
 
 app.get("/admin/conta", (c) => {
-  const ok = c.req.query("recuperado") === "1"
+  const recuperado = c.req.query("recuperado");
+  const ok = recuperado === "1"
     ? "Palavra-passe redefinida. Esse código de recuperação já não serve: gere novos se lhe restarem poucos."
+    : recuperado === "email" ? "Palavra-passe redefinida."
     : c.req.query("guardado") === "1" ? "Guardado." : undefined;
   return mostrarConta(c, { ok });
 });

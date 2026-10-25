@@ -95,9 +95,10 @@ Código em `plataforma/`; passos de configuração em [PLATAFORMA.md](PLATAFORMA
 ### Entre fases — Utilizadores (feito)
 - [x] Entrada com email e palavra-passe; vários utilizadores com os papéis gestor e equipa.
 - [x] Recuperação com códigos de recuperação (gestor); a equipa pede ao gestor.
-- [ ] Recuperação por email: precisa de envio de email. O envio pelo Cloudflare exige um
-  domínio do gestor no Cloudflare; a alternativa (envio pela plataforma) daria ao
-  fornecedor acesso ao link de recuperação. Decidir antes da Fase 3.
+- [x] Recuperação por email (todos os utilizadores): a instalação pede à plataforma que
+  envie o link (Resend, a partir de bookgest.pt). O link só funciona no browser onde foi
+  pedido (segunda parte secreta num cookie), por isso nem a plataforma nem o Resend o
+  conseguem usar. A plataforma só guarda um hash do destinatário, para limitar abusos.
 
 ### Fase 3 — Instalador e atualização automática
 - Assistente passo a passo (com capturas) para criar a conta Cloudflare e a chave.

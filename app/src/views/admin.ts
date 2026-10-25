@@ -346,18 +346,48 @@ export function paginaCodigos(codigos: string[], opcoes: { primeiraVez: boolean 
     </div>`, { admin: opcoes.primeiraVez ? undefined : true });
 }
 
-export function paginaRecuperar(erro?: string) {
+export function paginaRecuperar(opcoes: { enviado?: boolean; erroEmail?: string; erroCodigo?: string } = {}) {
   return pagina("Recuperar acesso", html`<h1>Recuperar acesso</h1>
-    <p>Gestores: use um dos códigos de recuperação que guardou.<br>
-      Equipa: peça ao gestor que lhe defina uma nova palavra-passe.</p>
-    ${erro ? html`<p class="erro">${erro}</p>` : ""}
-    <form method="post" action="/recuperar">
-      <label>Email <input type="email" name="email" required autocomplete="username"></label>
-      <label>Código de recuperação <input name="codigo" required autocapitalize="characters" autocomplete="off" placeholder="XXXXX-XXXXX"></label>
-      ${camposNovaSenha()}
-      <button type="submit">Definir palavra-passe</button>
-    </form>
+    <section class="cartao">
+      <h2>Receber um link por email</h2>
+      ${opcoes.enviado
+        ? html`<p>✅ Se o email pertencer a um utilizador, enviámos um link (válido durante 1 hora).</p>
+            <p class="aviso">Abra o link <strong>neste browser e neste dispositivo</strong>: por segurança, não funciona noutro.
+              Se o email abrir o link dentro da app de email, use "Abrir no browser".</p>`
+        : html`${opcoes.erroEmail ? html`<p class="erro">${opcoes.erroEmail}</p>` : ""}
+            <form method="post" action="/recuperar/email">
+              <label>Email <input type="email" name="email" required autocomplete="username"></label>
+              <button type="submit">Enviar link</button>
+            </form>`}
+    </section>
+    <details class="cartao" ${opcoes.erroCodigo ? "open" : ""}>
+      <summary>Gestores: usar um código de recuperação</summary>
+      ${opcoes.erroCodigo ? html`<p class="erro">${opcoes.erroCodigo}</p>` : ""}
+      <form method="post" action="/recuperar">
+        <label>Email <input type="email" name="email" required autocomplete="username"></label>
+        <label>Código de recuperação <input name="codigo" required autocapitalize="characters" autocomplete="off" placeholder="XXXXX-XXXXX"></label>
+        ${camposNovaSenha()}
+        <button type="submit">Definir palavra-passe</button>
+      </form>
+    </details>
+    <p class="nota">Equipa sem acesso ao email: peça a um gestor que lhe defina uma nova palavra-passe.</p>
     <p class="nota"><a href="/login">Voltar</a></p>`);
+}
+
+export function paginaNovaSenhaEmail(token: string, problema?: "invalido" | "outro_navegador", erro?: string) {
+  if (problema) {
+    return pagina("Recuperar acesso", html`<h1>Link sem efeito</h1>
+      <p>${problema === "outro_navegador"
+        ? "Este link tem de ser aberto no mesmo browser e dispositivo onde pediu a recuperação (e só o link mais recente funciona)."
+        : "O link expirou ou já foi usado."}</p>
+      <p><a class="botao" href="/recuperar">Pedir novo link</a></p>`);
+  }
+  return pagina("Nova palavra-passe", html`<h1>Nova palavra-passe</h1>
+    ${erro ? html`<p class="erro">${erro}</p>` : ""}
+    <form method="post" action="/recuperar/${token}">
+      ${camposNovaSenha()}
+      <button type="submit">Guardar e entrar</button>
+    </form>`);
 }
 
 export function paginaSemAcesso() {

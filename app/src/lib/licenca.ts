@@ -1,4 +1,10 @@
-import { CAMINHO_API_LICENCA, type PedidoLicenca, type RespostaLicenca } from "../../../comum/licenca";
+import {
+  CAMINHO_API_EMAIL_RECUPERACAO,
+  CAMINHO_API_LICENCA,
+  type PedidoEmailRecuperacao,
+  type PedidoLicenca,
+  type RespostaLicenca,
+} from "../../../comum/licenca";
 import { dataPt } from "../views/layout";
 
 export const URL_LICENCAS_PREDEFINIDO = "https://bookgest.pt";
@@ -42,4 +48,18 @@ export function avisoLicenca(chave: string | null, estado: EstadoGuardado | null
     return `Tem ${ativos} alojamentos ativos e a licença cobre ${estado.alojamentosPagos}. Atualize a assinatura ou arquive alojamentos.`;
   }
   return null;
+}
+
+// Pede à plataforma que envie o email de recuperação (a instalação não tem como enviar emails).
+export async function pedirEmailRecuperacao(urlBase: string, pedido: PedidoEmailRecuperacao, servico?: Fetcher): Promise<void> {
+  const pedidoHttp = new Request(new URL(CAMINHO_API_EMAIL_RECUPERACAO, urlBase), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(pedido),
+  });
+  const res = await (servico ? servico.fetch(pedidoHttp) : fetch(pedidoHttp));
+  if (!res.ok) {
+    const { erro } = await res.json<{ erro?: string }>().catch(() => ({ erro: undefined }));
+    throw new Error(erro ?? `A plataforma respondeu ${res.status}`);
+  }
 }

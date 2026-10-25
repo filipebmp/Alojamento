@@ -32,7 +32,7 @@ Fazer tudo primeiro em **modo de teste** (chaves `sk_test_…`) e só depois rep
 3. *Developers → API keys* → chave secreta → segredo do GitHub `STRIPE_SECRET_KEY`.
 4. *Developers → Webhooks* → novo destino:
    - endereço: `https://bookgest-plataforma.filipebmp.workers.dev/stripe/webhook`
-     (mudar para `https://bookgest.pt/stripe/webhook` depois do passo 4);
+     (mudar para `https://bookgest.pt/stripe/webhook` depois do passo 5);
    - eventos: `checkout.session.completed`, `customer.subscription.created`,
      `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.paid`;
    - segredo de assinatura (`whsec_…`) → segredo do GitHub `STRIPE_WEBHOOK_SECRET`.
@@ -60,7 +60,20 @@ registar o número.
    primeiro pagamento em modo de teste e confirmar a fatura-recibo (valores, IVA,
    NIF do cliente) antes de abrir as vendas.
 
-## 4. Domínio bookgest.pt → plataforma
+## 4. Resend (emails de recuperação de palavra-passe)
+
+Sem isto, a recuperação funciona só com os códigos de recuperação dos gestores.
+
+1. Criar conta em resend.com → *Domains → Add domain* → `bookgest.pt`.
+2. Copiar os registos DNS indicados pelo Resend (SPF e DKIM, normalmente num subdomínio
+   como `send.bookgest.pt` e em `resend._domainkey`) para o DNS do bookgest.pt (hoje na
+   amen.pt; depois do passo 5, no Cloudflare). Não alteram o site nem outros emails.
+3. Esperar que o Resend marque o domínio como verificado.
+4. *API Keys → Create API key* (permissão "Sending access") → segredo do GitHub
+   `RESEND_API_KEY`. O remetente é `EMAIL_REMETENTE` em `plataforma/wrangler.toml`.
+5. Em `/gestao`, a linha "Email (Resend)" passa a ✅. Testar em `bookgest.pt/recuperar`.
+
+## 5. Domínio bookgest.pt → plataforma
 
 Hoje o bookgest.pt mostra a instalação do fornecedor através do proxy Hetzner. Passa a
 mostrar a plataforma, servida diretamente pelo Cloudflare:

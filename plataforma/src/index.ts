@@ -1,7 +1,14 @@
 import { type Context, Hono } from "hono";
 import { deleteCookie, getSignedCookie, setSignedCookie } from "hono/cookie";
-import { CAMINHO_API_LICENCA, type RespostaLicenca, pedidoValido } from "../../comum/licenca";
+import {
+  CAMINHO_API_EMAIL_RECUPERACAO,
+  CAMINHO_API_LICENCA,
+  type RespostaLicenca,
+  pedidoEmailValido,
+  pedidoValido,
+} from "../../comum/licenca";
 import { iguais } from "../../comum/senha";
+import { type ConfigEmail, emailRecuperacao, enviarEmail, hashEmail } from "./email";
 import { type ConfigInvoiceXpress, type Fatura, emitirFatura, registarFatura } from "./faturas";
 import {
   type Cliente,
@@ -31,6 +38,9 @@ type Env = {
   INVOICEXPRESS_CONTA?: string;
   INVOICEXPRESS_API_KEY?: string;
   INVOICEXPRESS_IMPOSTO?: string;
+  RESEND_API_KEY?: string;
+  EMAIL_REMETENTE?: string; // ex.: "bookgest <nao-responder@bookgest.pt>"
+  RESEND_URL?: string; // só para testes locais
   // Endereço da instalação que servia o bookgest.pt antes da plataforma: os links já enviados a hóspedes continuam a funcionar.
   INSTALACAO_ANTIGA?: string;
 };
@@ -176,6 +186,47 @@ app.post(CAMINHO_API_LICENCA, async (c) => {
   return c.json<RespostaLicenca>({ estado: estadoLicenca(licenca), alojamentosPagos: licenca.alojamentos_pagos });
 });
 
+// ---------- Email de recuperação (pedido por uma instalação) ----------
+
+const LIMITE_POR_LICENCA_HORA = 20;
+const LIMITE_POR_DESTINATARIO_HORA = 3;
+
+function configEmail(env: Env): ConfigEmail | null {
+  if (!env.RESEND_API_KEY) return null;
+  return { apiKey: env.RESEND_API_KEY, remetente: env.EMAIL_REMETENTE || "bookgest <nao-responder@bookgest.pt>", url: env.RESEND_URL || undefined };
+}
+
+app.post(CAMINHO_API_EMAIL_RECUPERACAO, async (c) => {
+  const pedido = await c.req.json().catch(() => null);
+  if (!pedidoEmailValido(pedido)) return c.json({ erro: "Pedido inválido" }, 400);
+  const cfg = configEmail(c.env);
+  if (!cfg) return c.json({ erro: "Envio de email não configurado" }, 503);
+  // Qualquer licença conhecida serve, mesmo inativa: recuperar o acesso aos dados nunca é bloqueado.
+  const licenca = await obterLicencaPorChave(c.env.DB, pedido.chave);
+  if (!licenca) return c.json({ erro: "Licença desconhecida" }, 403);
+
+  const db = c.env.DB;
+  const desde = new Date(Date.now() - 3_600_000).toISOString();
+  const para = await hashEmail(pedido.para);
+  const [porLicenca, porDestinatario] = await Promise.all([
+    db.prepare("SELECT COUNT(*) AS n FROM envios_email WHERE licenca_id = ? AND enviado_em > ?").bind(licenca.id, desde).first<number>("n"),
+    db.prepare("SELECT COUNT(*) AS n FROM envios_email WHERE para_hash = ? AND enviado_em > ?").bind(para, desde).first<number>("n"),
+  ]);
+  if ((porLicenca ?? 0) >= LIMITE_POR_LICENCA_HORA || (porDestinatario ?? 0) >= LIMITE_POR_DESTINATARIO_HORA) {
+    return c.json({ erro: "Demasiados pedidos: tente daqui a uma hora" }, 429);
+  }
+  try {
+    await enviarEmail(cfg, { para: pedido.para, ...emailRecuperacao(pedido.link) });
+  } catch (e) {
+    console.error("Envio do email de recuperação falhou", e);
+    return c.json({ erro: "O envio do email falhou" }, 502);
+  }
+  await db.prepare("INSERT INTO envios_email (licenca_id, para_hash, enviado_em) VALUES (?, ?, ?)")
+    .bind(licenca.id, para, new Date().toISOString())
+    .run();
+  return c.json({ ok: true }, 202);
+});
+
 // ---------- Gestão (fornecedor) ----------
 
 const COOKIE = "gestao";
@@ -240,6 +291,7 @@ async function mostrarLicencas(c: Ctx, novaChave?: string) {
     { nome: "Preço", ok: preco != null, detalhe: preco != null ? `${(preco / 100).toFixed(2).replace(".", ",")} € por alojamento` : erroPreco ?? (env.STRIPE_PRECO ? "sem resposta" : "STRIPE_PRECO em falta") },
     { nome: "Segredo do webhook", ok: !!env.STRIPE_WEBHOOK_SECRET, detalhe: env.STRIPE_WEBHOOK_SECRET ? "definido" : "segredo STRIPE_WEBHOOK_SECRET em falta" },
     { nome: "Vendas abertas", ok: vendasAbertas(env), detalhe: env.VENDAS_ABERTAS === "sim" ? "sim" : "não" },
+    { nome: "Email (Resend)", ok: !!configEmail(env), detalhe: configEmail(env)?.remetente ?? "segredo RESEND_API_KEY em falta" },
     { nome: "InvoiceXpress", ok: !!configInvoiceXpress(env), detalhe: configInvoiceXpress(env) ? env.INVOICEXPRESS_CONTA! : "não configurado (faturas à mão)" },
   ];
   return c.html(paginaLicencas(licencas.results.map((l) => ({ licenca: l, cliente: l.cliente_id ? porId.get(l.cliente_id) ?? null : null })), estado, novaChave));

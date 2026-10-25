@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { pedidoValido } from "../../comum/licenca";
+import { pedidoEmailValido, pedidoValido } from "../../comum/licenca";
+import { emailRecuperacao } from "../src/email";
 import { type Fatura, corpoFaturaRecibo } from "../src/faturas";
 import { estadoLicenca, gerarChave } from "../src/licencas";
 import { assinaturaValida, codificar } from "../src/stripe";
@@ -81,5 +82,25 @@ describe("fatura-recibo no InvoiceXpress", () => {
     expect(r.client).toMatchObject({ name: "Ana", fiscal_id: "123456789", code: "cus_1" });
     expect(r.items[0]).toMatchObject({ quantity: 2, unit_price: 5, tax: { name: "IVA23" } });
     expect(r.items[0].description).toBe("Licença bookgest — 2 alojamento(s) de 01/10/2026 a 01/11/2026");
+  });
+});
+
+describe("email de recuperação", () => {
+  const ok = { chave: "BG-AAAA-BBBB", para: "ana@x.pt", link: "https://casa.exemplo.pt/recuperar/" + "a".repeat(43) };
+
+  it("aceita só links de recuperação", () => {
+    expect(pedidoEmailValido(ok)).toBe(true);
+    expect(pedidoEmailValido({ ...ok, link: "https://phishing.pt/login" })).toBe(false);
+    expect(pedidoEmailValido({ ...ok, link: "http://casa.exemplo.pt/recuperar/" + "a".repeat(43) })).toBe(false);
+    expect(pedidoEmailValido({ ...ok, link: ok.link + "?x=1" })).toBe(false);
+    expect(pedidoEmailValido({ ...ok, link: "javascript:alert(1)" })).toBe(false);
+  });
+
+  it("valida o destinatário", () => {
+    expect(pedidoEmailValido({ ...ok, para: "não é email" })).toBe(false);
+  });
+
+  it("escapa o link no HTML do email", () => {
+    expect(emailRecuperacao('https://x.pt/recuperar/"><script>').html).not.toContain("<script>");
   });
 });

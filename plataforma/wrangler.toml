@@ -25,6 +25,8 @@ STRIPE_PORTAL = "https://billing.stripe.com/p/login/test_cNieVe9NZglngtmbgI3gk00
 # Subdomínio da conta InvoiceXpress (<conta>.app.invoicexpress.com) e nome do imposto a aplicar
 INVOICEXPRESS_CONTA = ""
 INVOICEXPRESS_IMPOSTO = "IVA23"
+# Remetente dos emails de recuperação de palavra-passe (domínio verificado no Resend)
+EMAIL_REMETENTE = "bookgest <nao-responder@bookgest.pt>"
 # Enquanto o bookgest.pt passa da instalação do fornecedor para a plataforma: endereço dessa instalação,
 # para onde são reencaminhados os links de check-in já enviados (/c/…) e o painel (/admin).
 INSTALACAO_ANTIGA = ""
@@ -34,3 +36,4 @@ INSTALACAO_ANTIGA = ""
 #   STRIPE_SECRET_KEY         - chave secreta do Stripe (sk_…)
 #   STRIPE_WEBHOOK_SECRET     - segredo do webhook do Stripe (whsec_…)
 #   INVOICEXPRESS_API_KEY     - chave da API do InvoiceXpress
+#   RESEND_API_KEY            - chave da API do Resend (emails de recuperação)
