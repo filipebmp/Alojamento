@@ -193,8 +193,9 @@ export function paginaInicio(d: DadosSite) {
         <p>Sim. As reservas entram sozinhas pelo calendário (iCal) de cada plataforma, e os emails de reserva reencaminhados
           completam o nome, os hóspedes e os valores. Também pode criar reservas à mão em segundos.</p></details>
       <details><summary>O bookgest comunica ao SIBA e emite as faturas por mim?</summary>
-        <p>Ainda não: reúne os dados, calcula o que é preciso e avisa dos prazos; a comunicação e a fatura são feitas nos
-          sistemas oficiais e no seu programa de faturação certificado.</p></details>
+        <p>Reúne os dados, calcula o que é preciso e avisa dos prazos. A fatura-recibo fica preparada campo a campo, pronta a
+          copiar para o Portal das Finanças (gratuito), ou para o seu programa de faturação certificado. A comunicação
+          ao SIBA faz-se no sistema oficial.</p></details>
       <details><summary>Quanto custa a conta Cloudflare do modo Privado?</summary>
         <p>Nada: o plano gratuito chega para um pequeno gestor de Alojamento Local.</p></details>
       <details><summary>E se deixar de pagar?</summary>

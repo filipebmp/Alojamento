@@ -240,3 +240,13 @@ dd { margin: 0; overflow-wrap: anywhere; }
 .codigos { columns: 2; font-size: 1.1rem; }
 .codigos code { letter-spacing: .05em; }
 .separador { border: 0; border-top: 1px solid var(--linha); margin: 14px 0; }
+
+/* ---------- Ajudante da fatura-recibo (Portal das Finanças) ---------- */
+.campo-copiar { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--linha); }
+.campo-copiar:last-child { border-bottom: 0; }
+.campo-copiar .texto { flex: 1; min-width: 0; }
+.campo-copiar .texto > span { display: block; font-size: .8rem; color: var(--suave); }
+.campo-copiar .texto strong { display: block; font-weight: 600; overflow-wrap: anywhere; }
+.campo-copiar .texto small { display: block; font-size: .8rem; }
+.campo-copiar button { margin: 0; min-height: 40px; padding: 6px 12px; font-size: .87rem; flex-shrink: 0; }
+.campo-copiar button.copiado { background: var(--marca-suave); color: var(--marca); border-color: var(--marca); }

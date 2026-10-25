@@ -14,6 +14,7 @@ import { N_CODIGOS, type Papel, type Utilizador } from "../lib/utilizadores";
 import { dataCurta, dataPt, icone, nomeMes, pagina } from "./layout";
 import { chipOrigem, classePrazo } from "./painel";
 import { diferencaDias } from "../lib/datas";
+import { REGIMES_IVA } from "../lib/faturacao";
 
 export function paginaLogin(opcoes: { erro?: string; legado?: boolean; email?: string } = {}) {
   return pagina("Entrar", html`<div class="entrada">
@@ -237,12 +238,13 @@ export function paginaReserva(
         ? html`<dl><dt>Cliente</dt><dd>${f.nome}</dd><dt>NIF / ID</dt><dd>${f.nif} (${f.pais})</dd>
             ${f.morada ? html`<dt>Morada</dt><dd>${f.morada}, ${f.codigo_postal ?? ""} ${f.cidade ?? ""}</dd>` : ""}
             ${f.email ? html`<dt>Email</dt><dd>${f.email}</dd>` : ""}
-            <dt>Alojamento (IVA 6% incluído)</dt><dd>${euros(r.valor_total_cents)}</dd>
+            <dt>Alojamento (${alojamento.regime_iva === "isento" ? "isento de IVA" : `IVA ${alojamento.regime_iva}% incluído`})</dt><dd>${euros(r.valor_total_cents)}</dd>
             ${cobraTmt(regras) ? html`<dt>Taxa municipal turística (não sujeita a IVA)</dt><dd>${euros(tmt.valorCents)}</dd>` : ""}</dl>`
         : html`<p>À espera dos dados de faturação do hóspede.</p>`}
       ${r.fatura_emitida_em
         ? html`<p>✅ Fatura ${r.fatura_numero} emitida em ${dataPt(r.fatura_emitida_em)}</p>`
-        : html`<form method="post" action="/admin/reservas/${r.id}/fatura" class="linha">
+        : html`${f ? html`<p><a class="botao" href="/admin/reservas/${r.id}/fatura/portal">Preparar no Portal das Finanças</a></p>` : ""}
+          <form method="post" action="/admin/reservas/${r.id}/fatura" class="linha">
             <input name="fatura_numero" placeholder="N.º da fatura" required><button>Marcar como emitida</button></form>`}
     </section>
 
@@ -680,6 +682,12 @@ export function paginaAlojamento(
         <label>Pagar até ao dia (do mês seguinte)
           <input type="number" name="tmt_dia_pagamento" min="1" max="31" required value="${a?.tmt_dia_pagamento ?? 30}"></label>
         <label>Portal da câmara (endereço) <input name="tmt_portal" inputmode="url" value="${v(a?.tmt_portal)}" placeholder="https://"></label>
+      </section>
+      <section class="cartao">
+        <h2>Faturação</h2>
+        <label>Regime de IVA
+          <select name="regime_iva">${REGIMES_IVA.map((x) => html`<option value="${x.valor}"${(a?.regime_iva ?? "6") === x.valor ? " selected" : ""}>${x.nome}</option>`)}</select></label>
+        <p class="nota">Como está registado nas Finanças. Usado para preparar a fatura-recibo de cada reserva.</p>
       </section>
       <button type="submit">${a ? "Guardar" : "Criar alojamento"}</button>
     </form>

@@ -79,6 +79,8 @@ import {
 import { paginaHospede } from "./views/hospede";
 import { type VistaReservas, paginaCalendario, paginaHoje, paginaMais, paginaReservas } from "./views/painel";
 import { barrasCalendario, numerosHoje } from "./lib/painel";
+import { faturaPortal, regimeIvaValido } from "./lib/faturacao";
+import { paginaFaturaPortal } from "./views/fatura-portal";
 import { ESTATICOS } from "./estaticos.gerado";
 import { VERSAO } from "./versao";
 
@@ -326,7 +328,7 @@ const soGestor = async (c: Ctx, next: () => Promise<void>) => {
 for (const caminho of [
   "/admin/alojamentos", "/admin/alojamentos/*", "/admin/instrucoes", "/admin/tmt", "/admin/tmt/*",
   "/admin/definicoes", "/admin/definicoes/*", "/admin/utilizadores", "/admin/utilizadores/*",
-  "/admin/reservas/:id/valores", "/admin/reservas/:id/siba", "/admin/reservas/:id/fatura", "/admin/reservas/:id/cancelar",
+  "/admin/reservas/:id/valores", "/admin/reservas/:id/siba", "/admin/reservas/:id/fatura", "/admin/reservas/:id/fatura/portal", "/admin/reservas/:id/cancelar",
   "/admin/reservas/:id/ignorar", "/admin/reservas/:id/manter", "/admin/emails", "/admin/emails/*", "/admin/mais",
 ]) {
   app.use(caminho, soGestor);
@@ -494,6 +496,22 @@ app.post("/admin/reservas/:id/siba", async (c) => {
   return c.redirect(`/admin/reservas/${c.req.param("id")}`);
 });
 
+// Ajudante: os campos da fatura-recibo prontos a copiar para o Portal das Finanças.
+app.get("/admin/reservas/:id/fatura/portal", async (c) => {
+  const rc = await obterReserva(c.env.DB, Number(c.req.param("id")));
+  if (!rc) return c.notFound();
+  const { reserva: r, hospedes, faturacao: f } = rc;
+  const a = (await obterAlojamento(c.env.DB, r.alojamento_id))!;
+  const regras = regrasTmt(a);
+  const falta = !f
+    ? "O hóspede ainda não preencheu os dados de faturação (no formulário de check-in)."
+    : !r.valor_total_cents
+      ? "Indique primeiro o valor pago pelo hóspede, em Valores, na página da reserva."
+      : null;
+  const tmt = cobraTmt(regras) ? calcularTmt(r.checkin, r.checkout, hospedes, regras).valorCents : 0;
+  return c.html(paginaFaturaPortal(r, f && !falta ? faturaPortal(r, a, f, tmt) : null, falta));
+});
+
 app.post("/admin/reservas/:id/fatura", async (c) => {
   const { fatura_numero } = await c.req.parseBody<{ fatura_numero: string }>();
   if (!fatura_numero?.trim()) return c.text("Indique o número da fatura.", 400);
@@ -600,8 +618,8 @@ app.post("/admin/alojamentos", async (c) => {
   }
   const res = await c.env.DB.prepare(
     `INSERT INTO alojamentos (nome, morada, registo_al, codigo_cofre, hora_checkin, horas_antes_codigo, horas_prazo_hospedes,
-       concelho, tmt_valor_cents, tmt_max_noites, tmt_idade_minima, tmt_dia_declaracao, tmt_dia_pagamento, tmt_portal, criado_em)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       concelho, tmt_valor_cents, tmt_max_noites, tmt_idade_minima, tmt_dia_declaracao, tmt_dia_pagamento, tmt_portal, regime_iva, criado_em)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   )
     .bind(...valoresAlojamento(v), new Date().toISOString())
     .run();
@@ -689,7 +707,7 @@ app.post("/admin/alojamentos/:id", async (c) => {
   await c.env.DB.prepare(
     `UPDATE alojamentos SET nome = ?, morada = ?, registo_al = ?, codigo_cofre = ?, hora_checkin = ?, horas_antes_codigo = ?,
        horas_prazo_hospedes = ?, concelho = ?, tmt_valor_cents = ?, tmt_max_noites = ?, tmt_idade_minima = ?,
-       tmt_dia_declaracao = ?, tmt_dia_pagamento = ?, tmt_portal = ?
+       tmt_dia_declaracao = ?, tmt_dia_pagamento = ?, tmt_portal = ?, regime_iva = ?
      WHERE id = ?`,
   )
     .bind(...valoresAlojamento(v), a.id)
@@ -1178,17 +1196,20 @@ function lerAlojamento(b: Record<string, string>) {
   if (valor > 0 && !concelho) return "Indique o concelho da taxa turística.";
   if (maxNoites == null || idade == null || diaDecl == null || diaPag == null) return "Confira os campos da taxa turística.";
   if (portal && !/^https:\/\/\S+$/.test(portal)) return "O endereço do portal da câmara tem de começar por https://";
+  const regimeIva = b.regime_iva ?? "6";
+  if (!regimeIvaValido(regimeIva)) return "Escolha o regime de IVA.";
   return {
     nome, morada: texto("morada"), registo_al: texto("registo_al"), codigo_cofre: codigo, hora_checkin: hora,
     horas_antes_codigo: horasAntes, horas_prazo_hospedes: horasPrazo, concelho: concelho ?? "", tmt_valor_cents: valor,
     tmt_max_noites: maxNoites, tmt_idade_minima: idade, tmt_dia_declaracao: diaDecl, tmt_dia_pagamento: diaPag, tmt_portal: portal,
+    regime_iva: regimeIva,
   };
 }
 
 // Mesma ordem das colunas no INSERT e no UPDATE de alojamentos.
 function valoresAlojamento(v: Exclude<ReturnType<typeof lerAlojamento>, string>) {
   return [v.nome, v.morada, v.registo_al, v.codigo_cofre, v.hora_checkin, v.horas_antes_codigo, v.horas_prazo_hospedes,
-    v.concelho, v.tmt_valor_cents, v.tmt_max_noites, v.tmt_idade_minima, v.tmt_dia_declaracao, v.tmt_dia_pagamento, v.tmt_portal];
+    v.concelho, v.tmt_valor_cents, v.tmt_max_noites, v.tmt_idade_minima, v.tmt_dia_declaracao, v.tmt_dia_pagamento, v.tmt_portal, v.regime_iva];
 }
 
 function lerHospede(b: Record<string, string>, p: string) {

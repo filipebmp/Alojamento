@@ -70,8 +70,12 @@ export interface Alojamento {
   tmt_dia_declaracao: number;
   tmt_dia_pagamento: number;
   tmt_portal: string | null;
+  regime_iva: RegimeIva;
   criado_em: string;
 }
+
+// Taxa de IVA do alojamento ("6" continente, "5" Madeira, "4" Açores) ou isenção do art. 53.º.
+export type RegimeIva = "6" | "5" | "4" | "isento";
 
 // Taxa municipal turística de um concelho (valorPorNoiteCents 0 = não cobra).
 export interface RegrasTmt {
