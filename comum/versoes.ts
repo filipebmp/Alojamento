@@ -60,4 +60,4 @@ export const SQL_TABELA_MIGRACOES =
 
 // Chave pública (Ed25519, 32 bytes em base64) que verifica as versões. A privada só existe no GitHub
 // (segredo BOOKGEST_CHAVE_ASSINATURA). Vazia = atualizações automáticas e publicação de versões desligadas.
-export const CHAVE_PUBLICA_VERSOES = "";
+export const CHAVE_PUBLICA_VERSOES = "ACKlX6IZw3IrJhIZ2yEcyjtyODoBHH0mGoO8m27Alos=";
