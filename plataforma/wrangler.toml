@@ -2,6 +2,12 @@ name = "bookgest-plataforma"
 main = "src/index.ts"
 compatibility_date = "2025-10-01"
 
+# bookgest.pt e www servidos diretamente pela plataforma (o Cloudflare cria os registos DNS).
+routes = [
+  { pattern = "bookgest.pt", custom_domain = true },
+  { pattern = "www.bookgest.pt", custom_domain = true },
+]
+
 [assets]
 directory = "public"
 
@@ -17,13 +23,17 @@ crons = ["23 * * * *"]
 
 [vars]
 # Endereço público da plataforma (usado nos regressos do Stripe). Vazio = o endereço do pedido.
-URL_PUBLICO = ""
+URL_PUBLICO = "https://bookgest.pt"
 # Email de contacto mostrado no site
 CONTACTO = ""
 # "sim" para aceitar registos com 30 dias grátis, alojados na conta do fornecedor (exige Resend e CF_API_TOKEN)
 REGISTOS_ABERTOS = "nao"
 # Subdomínio workers.dev da conta do fornecedor (endereços das instalações alojadas: bk-<nome>.<subdomínio>.workers.dev)
 CF_SUBDOMINIO = "filipebmp"
+# Instalações alojadas em <nome>.bookgest.pt (as existentes mudam na tarefa horária). Vazio = workers.dev.
+DOMINIO_ALOJADAS = "bookgest.pt"
+# Id da zona bookgest.pt (vazio = procurado pela API; precisa da permissão Zone:Read na chave)
+ZONA_ID = ""
 # "sim" para mostrar o botão de compra (exige também STRIPE_PRECO e STRIPE_SECRET_KEY)
 VENDAS_ABERTAS = "sim"
 # Id do preço mensal por alojamento no Stripe (price_…), com IVA incluído

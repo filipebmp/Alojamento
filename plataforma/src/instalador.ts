@@ -3,7 +3,7 @@
 //   conta dele (para a atualização automática); a plataforma não a guarda.
 // - modo "alojado": na conta do fornecedor, uma app e uma base por cliente. A plataforma atualiza-as.
 
-import { type Binding, Cloudflare, ErroCloudflare } from "../../comum/cloudflare";
+import { type Binding, Cloudflare, ErroCloudflare, ligarDominio } from "../../comum/cloudflare";
 import { type Versao, compararVersoes } from "../../comum/versoes";
 
 export const NOME_PRIVADO = "bookgest";
@@ -24,7 +24,8 @@ export interface OpcoesInstalacao {
   urlLicencas: string;
   apiCloudflare?: string;
   // Alojado: conta do fornecedor e nome da instalação; privado: primeira conta da chave, nome "bookgest".
-  alojado?: { conta: string; nome: string };
+  // Com "dominio", a instalação alojada fica em <hostname> (ex.: joao.bookgest.pt) em vez do workers.dev.
+  alojado?: { conta: string; nome: string; dominio?: { hostname: string; zona: string } };
 }
 
 const aleatorio = (n: number) =>
@@ -35,10 +36,13 @@ async function sha256(s: string): Promise<string> {
   return [...new Uint8Array(d)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
+// Nomes que nenhum cliente pode usar (subdomínios do próprio bookgest.pt).
+const RESERVADOS = new Set(["www", "painel", "api", "app", "admin", "gestao", "mail", "email", "send", "smtp", "bookgest", "ajuda", "suporte", "status", "blog", "docs", "teste", "demo"]);
+
 // Nome do endereço escolhido pelo cliente (modo alojado): bk-<slug> é o nome da app e da base.
 export function slugValido(s: string | undefined): string | null {
   const x = s?.trim().toLowerCase();
-  return x && /^[a-z0-9](?:[a-z0-9-]{1,28}[a-z0-9])$/.test(x) && !x.includes("--") ? x : null;
+  return x && /^[a-z0-9](?:[a-z0-9-]{1,28}[a-z0-9])$/.test(x) && !x.includes("--") && !RESERVADOS.has(x) ? x : null;
 }
 
 export const nomeAlojado = (slug: string) => `bk-${slug}`;
@@ -61,7 +65,7 @@ export async function instalar(token: string, d: OpcoesInstalacao): Promise<Resu
   } catch {
     subdominio = (await cf.pedido<{ subdomain: string }>("PUT", `/accounts/${conta}/workers/subdomain`, { subdomain: `bookgest-${aleatorio(6)}` })).subdomain;
   }
-  const url = `https://${nome}.${subdominio}.workers.dev`;
+  const url = d.alojado?.dominio ? `https://${d.alojado.dominio.hostname}` : `https://${nome}.${subdominio}.workers.dev`;
 
   // Base de dados: reutiliza a existente numa reinstalação (os dados do gestor nunca são apagados).
   const existentes = await cf.pedido<{ uuid: string; name: string }[]>("GET", `/accounts/${conta}/d1/database?name=${nome}`);
@@ -84,6 +88,7 @@ export async function instalar(token: string, d: OpcoesInstalacao): Promise<Resu
   ];
   await cf.publicarScript(conta, nome, d.versao, bindings);
   await cf.pedido("POST", `/accounts/${conta}/workers/scripts/${nome}/subdomain`, { enabled: true, previews_enabled: false });
+  if (d.alojado?.dominio) await ligarDominio(cf, conta, d.alojado.dominio.zona, d.alojado.dominio.hostname, nome);
   await cf.pedido("PUT", `/accounts/${conta}/workers/scripts/${nome}/schedules`, [{ cron: CRON_DIARIO }]);
 
   // Chave de licença e, numa instalação nova, o código de uso único que abre o assistente de primeiro arranque.
@@ -102,6 +107,27 @@ export async function atualizarAlojada(token: string, conta: string, nome: strin
   const cf = new Cloudflare(token, apiCloudflare);
   await cf.aplicarMigracoes(conta, base, v.migracoes);
   await cf.publicarScript(conta, nome, v, "manter");
+}
+
+// Instalação alojada criada antes do domínio próprio: liga <hostname> e atualiza o URL_PUBLICO da app
+// (os links de check-in passam a usar o domínio; o workers.dev continua a funcionar).
+export async function mudarParaDominio(
+  token: string,
+  conta: string,
+  nome: string,
+  v: Versao,
+  d: { hostname: string; zona: string; urlLicencas: string },
+  apiCloudflare?: string,
+) {
+  const cf = new Cloudflare(token, apiCloudflare);
+  await ligarDominio(cf, conta, d.zona, d.hostname, nome);
+  await cf.publicarScript(conta, nome, v, {
+    mudar: [
+      { type: "plain_text", name: "URL_PUBLICO", text: `https://${d.hostname}` },
+      { type: "plain_text", name: "URL_LICENCAS", text: d.urlLicencas },
+    ],
+    manter: ["d1", "secret_text", "service"],
+  });
 }
 
 export function precisaAtualizar(publicada: string | null, atual: string): boolean {

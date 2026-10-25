@@ -10,7 +10,16 @@ import {
 import { iguais } from "../../comum/senha";
 import { ErroCloudflare } from "../../comum/cloudflare";
 import { CAMINHO_API_VERSOES, CHAVE_PUBLICA_VERSOES, type Versao, type VersaoAssinada, assinaturaConfere, compararVersoes } from "../../comum/versoes";
-import { type ResultadoInstalacao, atualizarAlojada, instalar, nomeAlojado, precisaAtualizar, slugValido } from "./instalador";
+import {
+  type ResultadoInstalacao,
+  atualizarAlojada,
+  instalar,
+  mudarParaDominio,
+  nomeAlojado,
+  precisaAtualizar,
+  slugValido,
+} from "./instalador";
+import { Cloudflare } from "../../comum/cloudflare";
 import {
   type ConfigEmail,
   emailConfirmarRegisto,
@@ -68,7 +77,9 @@ type Env = {
   // Modo alojado: conta Cloudflare do fornecedor onde ficam as instalações dos clientes.
   CF_API_TOKEN?: string;
   CF_CONTA?: string;
-  CF_SUBDOMINIO?: string; // subdomínio workers.dev da conta (só para mostrar o endereço no registo)
+  CF_SUBDOMINIO?: string; // subdomínio workers.dev da conta (endereços sem domínio próprio)
+  DOMINIO_ALOJADAS?: string; // ex.: "bookgest.pt" → instalações alojadas em <nome>.bookgest.pt
+  ZONA_ID?: string; // id da zona do domínio no Cloudflare (se vazio, é procurado pela API)
   REGISTOS_ABERTOS?: string; // "sim" para aceitar registos com período experimental
   // Endereço da instalação que servia o bookgest.pt antes da plataforma: os links já enviados a hóspedes continuam a funcionar.
   INSTALACAO_ANTIGA?: string;
@@ -306,7 +317,24 @@ app.post("/instalar/concluir", async (c) => {
 // ---------- Modo "Simples": instalações alojadas na conta do fornecedor ----------
 
 const alojamentoDisponivel = (env: Env) => !!env.CF_API_TOKEN && !!env.CF_CONTA;
-const sufixoEndereco = (env: Env) => `bk-<nome>.${env.CF_SUBDOMINIO || "…"}.workers.dev`;
+const sufixoEndereco = (env: Env) =>
+  env.DOMINIO_ALOJADAS ? `<nome>.${env.DOMINIO_ALOJADAS}` : `bk-<nome>.${env.CF_SUBDOMINIO || "…"}.workers.dev`;
+
+let zonaEmCache: string | null = null;
+
+async function zonaDominio(env: Env): Promise<string> {
+  if (env.ZONA_ID) return env.ZONA_ID;
+  if (zonaEmCache) return zonaEmCache;
+  const zonas = await new Cloudflare(env.CF_API_TOKEN!, env.CF_API_URL || undefined)
+    .pedido<{ id: string; name: string }[]>("GET", `/zones?name=${env.DOMINIO_ALOJADAS}`);
+  const z = zonas.find((x) => x.name === env.DOMINIO_ALOJADAS);
+  if (!z) throw new ErroCloudflare(`zona ${env.DOMINIO_ALOJADAS} não encontrada (defina ZONA_ID)`);
+  return (zonaEmCache = z.id);
+}
+
+async function dominioAlojada(env: Env, slug: string) {
+  return env.DOMINIO_ALOJADAS ? { hostname: `${slug}.${env.DOMINIO_ALOJADAS}`, zona: await zonaDominio(env) } : undefined;
+}
 
 async function versaoParaInstalar(db: D1Database): Promise<Versao | null> {
   const atual = await versaoMaisRecente(db);
@@ -331,7 +359,7 @@ async function criarAlojada(c: Ctx, l: Licenca, slug: string): Promise<Resultado
       chaveLicenca: l.chave,
       urlLicencas: urlBase(c),
       apiCloudflare: c.env.CF_API_URL || undefined,
-      alojado: { conta: c.env.CF_CONTA!, nome: nomeAlojado(slug) },
+      alojado: { conta: c.env.CF_CONTA!, nome: nomeAlojado(slug), dominio: await dominioAlojada(c.env, slug) },
     });
     await c.env.DB.prepare(
       "UPDATE licencas SET modo = 'alojado', url_instalacao = ?, instalada_em = ?, cf_base = ?, versao_publicada = ?, erro_atualizacao = NULL WHERE id = ?",
@@ -403,7 +431,7 @@ app.post("/registar", async (c) => {
   const valores = { nome: b.nome?.trim() || undefined, email: b.email?.trim().toLowerCase(), slug: b.slug?.trim().toLowerCase(), sufixo: sufixoEndereco(c.env) };
   const slug = slugValido(b.slug);
   if (!valores.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(valores.email)) return c.html(paginaRegistar({ ...valores, erro: "Indique um email válido." }), 400);
-  if (!slug) return c.html(paginaRegistar({ ...valores, erro: "Nome do endereço inválido: 3 a 30 letras minúsculas, números ou hífens." }), 400);
+  if (!slug) return c.html(paginaRegistar({ ...valores, erro: "Nome do endereço inválido ou reservado: 3 a 30 letras minúsculas, números ou hífens." }), 400);
   if (!b.termos) return c.html(paginaRegistar({ ...valores, erro: "Tem de aceitar os termos." }), 400);
   if (await c.env.DB.prepare("SELECT 1 FROM licencas WHERE slug = ?").bind(slug).first()) {
     return c.html(paginaRegistar({ ...valores, erro: "Esse nome de endereço já está a ser usado. Escolha outro." }), 400);
@@ -472,7 +500,7 @@ app.post("/criar", async (c) => {
   const l = await licencaParaCriar(c.env.DB, b.chave);
   if (typeof l === "string") return c.html(paginaMensagem("Não é possível criar", l), 400);
   const slug = slugValido(b.slug);
-  if (!slug) return c.html(paginaCriar(l.chave, { erro: "Nome do endereço inválido: 3 a 30 letras minúsculas, números ou hífens.", slug: b.slug, sufixo: sufixoEndereco(c.env) }), 400);
+  if (!slug) return c.html(paginaCriar(l.chave, { erro: "Nome do endereço inválido ou reservado: 3 a 30 letras minúsculas, números ou hífens.", slug: b.slug, sufixo: sufixoEndereco(c.env) }), 400);
   const res = await criarAlojada(c, l, slug);
   if (typeof res === "string") return c.html(paginaCriar(l.chave, { erro: res, slug, sufixo: sufixoEndereco(c.env) }), 400);
   return c.html(paginaInstalado(res));
@@ -522,9 +550,19 @@ async function atualizarAlojadas(env: Env): Promise<void> {
   const v = await versaoParaInstalar(env.DB);
   if (!v) return;
   const alojadas = (await env.DB.prepare("SELECT * FROM licencas WHERE modo = 'alojado' AND slug IS NOT NULL AND cf_base IS NOT NULL ORDER BY erro_atualizacao IS NOT NULL, id").all<Licenca>()).results;
-  for (const l of alojadas.filter((x) => precisaAtualizar(x.versao_publicada, v.versao)).slice(0, ALOJADAS_POR_EXECUCAO)) {
+  // Instalações criadas antes do domínio próprio passam para <nome>.<domínio> (também nesta tarefa horária).
+  const semDominio = (l: Licenca) => !!env.DOMINIO_ALOJADAS && !l.url_instalacao?.endsWith(`.${env.DOMINIO_ALOJADAS}`);
+  for (const l of alojadas.filter((x) => precisaAtualizar(x.versao_publicada, v.versao) || semDominio(x)).slice(0, ALOJADAS_POR_EXECUCAO)) {
     try {
-      await atualizarAlojada(env.CF_API_TOKEN!, env.CF_CONTA!, nomeAlojado(l.slug!), l.cf_base!, v, env.CF_API_URL || undefined);
+      if (precisaAtualizar(l.versao_publicada, v.versao)) {
+        await atualizarAlojada(env.CF_API_TOKEN!, env.CF_CONTA!, nomeAlojado(l.slug!), l.cf_base!, v, env.CF_API_URL || undefined);
+      }
+      if (semDominio(l)) {
+        const d = (await dominioAlojada(env, l.slug!))!;
+        await mudarParaDominio(env.CF_API_TOKEN!, env.CF_CONTA!, nomeAlojado(l.slug!), v,
+          { ...d, urlLicencas: env.URL_PUBLICO || `https://${env.DOMINIO_ALOJADAS}` }, env.CF_API_URL || undefined);
+        await env.DB.prepare("UPDATE licencas SET url_instalacao = ? WHERE id = ?").bind(`https://${d.hostname}`, l.id).run();
+      }
       await env.DB.prepare("UPDATE licencas SET versao_publicada = ?, erro_atualizacao = NULL WHERE id = ?").bind(v.versao, l.id).run();
     } catch (e) {
       console.error(`Atualização de ${l.slug} falhou`, e);

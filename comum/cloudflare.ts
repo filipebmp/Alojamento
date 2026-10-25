@@ -56,12 +56,20 @@ export class Cloudflare {
   // ---------- Workers ----------
 
   // Publica o módulo da versão. Na primeira publicação definem-se as ligações (bindings);
-  // nas atualizações mantêm-se as existentes (keep_bindings).
-  async publicarScript(conta: string, nome: string, v: Pick<Versao, "script" | "compatibilidade">, bindings: Binding[] | "manter") {
+  // nas atualizações mantêm-se as existentes (keep_bindings). Com { mudar, manter }, as ligações em
+  // "mudar" são substituídas e as dos tipos em "manter" ficam como estão.
+  async publicarScript(
+    conta: string,
+    nome: string,
+    v: Pick<Versao, "script" | "compatibilidade">,
+    bindings: Binding[] | "manter" | { mudar: Binding[]; manter: Binding["type"][] },
+  ) {
     const metadata = {
       main_module: "index.js",
       compatibility_date: v.compatibilidade,
-      ...(bindings === "manter" ? { bindings: [], keep_bindings: ["d1", "plain_text", "secret_text", "service"] } : { bindings }),
+      ...(bindings === "manter"
+        ? { bindings: [], keep_bindings: ["d1", "plain_text", "secret_text", "service"] }
+        : Array.isArray(bindings) ? { bindings } : { bindings: bindings.mudar, keep_bindings: bindings.manter }),
     };
     const form = new FormData();
     form.append("metadata", new Blob([JSON.stringify(metadata)], { type: "application/json" }));
@@ -76,6 +84,11 @@ export class Cloudflare {
       throw new ErroCloudflare(json?.errors?.map((e) => `${e.message} (${e.code})`).join("; ") || `HTTP ${res.status}`);
     }
   }
+}
+
+// Liga um domínio (ex.: joao.bookgest.pt) a um Worker; o Cloudflare cria o registo DNS e o certificado.
+export async function ligarDominio(cf: Cloudflare, conta: string, zona: string, hostname: string, script: string): Promise<void> {
+  await cf.pedido("PUT", `/accounts/${conta}/workers/domains`, { hostname, service: script, zone_id: zona, environment: "production" });
 }
 
 export type Binding =

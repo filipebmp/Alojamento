@@ -120,3 +120,12 @@ describe("nome do endereço (modo alojado)", () => {
     expect(slugValido("a".repeat(31))).toBeNull();
   });
 });
+
+describe("nomes reservados", () => {
+  it("não deixa clientes usar subdomínios do próprio bookgest", () => {
+    expect(slugValido("painel")).toBeNull();
+    expect(slugValido("www")).toBeNull();
+    expect(slugValido("api")).toBeNull();
+    expect(slugValido("painel-joao")).toBe("painel-joao");
+  });
+});
