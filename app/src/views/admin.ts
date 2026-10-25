@@ -644,13 +644,21 @@ export function paginaDefinicoes(opcoes: {
 
 // ---------- Alojamentos ----------
 
-export function paginaAlojamentos(alojamentos: Alojamento[]) {
+// limite: alojamentos ativos incluídos na licença (null = sem licença verificada).
+export function paginaAlojamentos(alojamentos: Alojamento[], opcoes: { limite?: number | null; erro?: string } = {}) {
   const linha = (a: Alojamento) => html`<li><a href="/admin/alojamentos/${a.id}">
       <strong>${a.nome}</strong>${a.ativo ? "" : " (arquivado)"}
       <span class="prazo">${[a.concelho, a.registo_al ? `AL ${a.registo_al}` : ""].filter(Boolean).join(" · ") || "—"}</span></a></li>`;
+  const ativos = alojamentos.filter((a) => a.ativo).length;
+  const cheio = opcoes.limite != null && ativos >= opcoes.limite;
   return pagina("Alojamentos", html`<h1>Alojamentos</h1>
+    ${opcoes.erro ? html`<p class="aviso">${opcoes.erro}</p>` : ""}
     <ul class="lista">${alojamentos.map(linha)}</ul>
-    <a class="botao" href="/admin/alojamentos/novo">+ Novo alojamento</a>`, { admin: true, seccao: "alojamentos" });
+    ${opcoes.limite != null ? html`<p class="nota">A sua licença inclui ${opcoes.limite} alojamento(s) ativo(s): está a usar ${ativos}.</p>` : ""}
+    ${cheio
+      ? html`<p class="nota">Para acrescentar outro alojamento, aumente o número de alojamentos da assinatura em
+          <a href="/admin/definicoes">Definições → Licença</a>, ou arquive um alojamento.</p>`
+      : html`<a class="botao" href="/admin/alojamentos/novo">+ Novo alojamento</a>`}`, { admin: true, seccao: "alojamentos" });
 }
 
 // Preenche os campos da taxa turística a partir do concelho escolhido.

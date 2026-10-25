@@ -712,14 +712,42 @@ app.post("/admin/tmt/:alojamento/:mes/:acao{declarado|pago}", async (c) => {
 
 // ---------- Alojamentos ----------
 
-app.get("/admin/alojamentos", async (c) => c.html(paginaAlojamentos(await listarAlojamentos(c.env.DB))));
+app.get("/admin/alojamentos", async (c) =>
+  c.html(paginaAlojamentos(await listarAlojamentos(c.env.DB), { limite: await limiteAlojamentos(c.env.DB) })));
+
+// N.º de alojamentos ativos incluídos na licença. Sem licença verificada, só o primeiro alojamento.
+async function limiteAlojamentos(db: D1Database): Promise<number> {
+  const { estado } = await lerLicenca(db);
+  return estado ? estado.alojamentosPagos : 1;
+}
+
+// Antes de criar ou reativar um alojamento: devolve a mensagem de recusa se a licença já estiver cheia.
+// Se estiver, volta a perguntar ao servidor de licenças (a assinatura pode ter sido aumentada há pouco).
+async function semVagaAlojamento(c: Ctx): Promise<string | null> {
+  const contar = async () => (await listarAlojamentos(c.env.DB)).filter((a) => a.ativo).length;
+  const ativos = await contar();
+  if (ativos < (await limiteAlojamentos(c.env.DB))) return null;
+  await verificarLicenca(c.env).catch(() => undefined);
+  const limite = await limiteAlojamentos(c.env.DB);
+  if (ativos < limite) return null;
+  return `A sua licença inclui ${limite} alojamento(s) ativo(s) e já tem ${ativos}. Para acrescentar outro, aumente o número de alojamentos da assinatura (Definições → Licença) ou arquive um alojamento.`;
+}
+
+async function recusarAlojamento(c: Ctx, erro: string) {
+  const alojamentos = await listarAlojamentos(c.env.DB);
+  return c.html(paginaAlojamentos(alojamentos, { limite: await limiteAlojamentos(c.env.DB), erro }), 403);
+}
 
 app.get("/admin/alojamentos/novo", async (c) => {
+  const semVaga = await semVagaAlojamento(c);
+  if (semVaga) return recusarAlojamento(c, semVaga);
   const primeiro = !(await listarAlojamentos(c.env.DB)).length;
   return c.html(paginaAlojamento(null, { primeiro, codigoSugerido: primeiro ? c.env.CODIGO_CHAVES : undefined }));
 });
 
 app.post("/admin/alojamentos", async (c) => {
+  const semVaga = await semVagaAlojamento(c);
+  if (semVaga) return recusarAlojamento(c, semVaga);
   const v = lerAlojamento(await c.req.parseBody<Record<string, string>>());
   if (typeof v === "string") {
     const primeiro = !(await listarAlojamentos(c.env.DB)).length;
@@ -826,6 +854,10 @@ app.post("/admin/alojamentos/:id", async (c) => {
 
 // Arquivar em vez de apagar: as reservas e declarações têm de ser conservadas.
 app.post("/admin/alojamentos/:id/:acao{arquivar|reativar}", async (c) => {
+  if (c.req.param("acao") === "reativar") {
+    const semVaga = await semVagaAlojamento(c);
+    if (semVaga) return recusarAlojamento(c, semVaga);
+  }
   await c.env.DB.prepare("UPDATE alojamentos SET ativo = ? WHERE id = ?")
     .bind(c.req.param("acao") === "reativar" ? 1 : 0, Number(c.req.param("id")))
     .run();
