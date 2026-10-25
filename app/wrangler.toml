@@ -11,9 +11,15 @@ database_name = "alojamento"
 database_id = "SUBSTITUIR_PELO_ID_DA_BASE_DE_DADOS"
 migrations_dir = "migrations"
 
+# Verificação diária da licença (04:17 UTC)
+[triggers]
+crons = ["17 4 * * *"]
+
 [vars]
 # Endereço público da app, usado nos links de check-in enviados aos hóspedes
 URL_PUBLICO = "https://bookgest.pt"
+# Servidor de licenças. Predefinido: https://bookgest.pt (quando a plataforma passar a servir esse domínio).
+URL_LICENCAS = "https://bookgest-plataforma.filipebmp.workers.dev"
 
 # A restante configuração (palavra-passe, alojamentos, código do cofre, horários,
 # taxa turística) é feita no painel e guardada na base de dados.

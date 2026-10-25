@@ -1,0 +1,36 @@
+name = "bookgest-plataforma"
+main = "src/index.ts"
+compatibility_date = "2025-10-01"
+
+[assets]
+directory = "public"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "plataforma"
+database_id = "SUBSTITUIR_PELO_ID_DA_BASE_DE_DADOS"
+migrations_dir = "migrations"
+
+[vars]
+# Endereço público da plataforma (usado nos regressos do Stripe). Vazio = o endereço do pedido.
+URL_PUBLICO = ""
+# Email de contacto mostrado no site
+CONTACTO = ""
+# "sim" para mostrar o botão de compra (exige também STRIPE_PRECO e STRIPE_SECRET_KEY)
+VENDAS_ABERTAS = "nao"
+# Id do preço mensal por alojamento no Stripe (price_…), com IVA incluído
+STRIPE_PRECO = ""
+# Link de acesso ao portal do cliente do Stripe (Settings → Billing → Customer portal), para alterar ou cancelar
+STRIPE_PORTAL = ""
+# Subdomínio da conta InvoiceXpress (<conta>.app.invoicexpress.com) e nome do imposto a aplicar
+INVOICEXPRESS_CONTA = ""
+INVOICEXPRESS_IMPOSTO = "IVA23"
+# Enquanto o bookgest.pt passa da instalação do fornecedor para a plataforma: endereço dessa instalação,
+# para onde são reencaminhados os links de check-in já enviados (/c/…) e o painel (/admin).
+INSTALACAO_ANTIGA = ""
+
+# Segredos (definir no GitHub: Settings → Secrets and variables → Actions):
+#   PLATAFORMA_ADMIN_PASSWORD - acesso à página /gestao (enviado ao Worker como ADMIN_PASSWORD)
+#   STRIPE_SECRET_KEY         - chave secreta do Stripe (sk_…)
+#   STRIPE_WEBHOOK_SECRET     - segredo do webhook do Stripe (whsec_…)
+#   INVOICEXPRESS_API_KEY     - chave da API do InvoiceXpress

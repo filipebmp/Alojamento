@@ -20,11 +20,25 @@ jobs:
       - run: npm run typecheck
       - run: npm test
 
-      - name: Publicar no Cloudflare
+      - name: Publicar a app (instalação do gestor)
+        working-directory: app
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
           SESSION_SECRET: ${{ secrets.SESSION_SECRET }}
           CODIGO_CHAVES: ${{ secrets.CODIGO_CHAVES }}
-        run: node scripts/deploy.mjs
+        run: node ../scripts/publicar.mjs alojamento ADMIN_PASSWORD SESSION_SECRET CODIGO_CHAVES
+
+      - name: Publicar a plataforma (bookgest.pt)
+        working-directory: plataforma
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          PLATAFORMA_ADMIN_PASSWORD: ${{ secrets.PLATAFORMA_ADMIN_PASSWORD }}
+          STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+          STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
+          INVOICEXPRESS_API_KEY: ${{ secrets.INVOICEXPRESS_API_KEY }}
+        run: >-
+          node ../scripts/publicar.mjs plataforma ADMIN_PASSWORD=PLATAFORMA_ADMIN_PASSWORD
+          STRIPE_SECRET_KEY STRIPE_WEBHOOK_SECRET INVOICEXPRESS_API_KEY

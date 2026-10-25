@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { hashSenha, verificarSenha } from "../src/lib/senha";
+import { hashSenha, verificarSenha } from "./senha";
 
 describe("palavra-passe", () => {
   it("aceita a palavra-passe certa e rejeita as outras", async () => {

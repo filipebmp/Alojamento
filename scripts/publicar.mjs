@@ -1,13 +1,17 @@
-// Publicação no Cloudflare (usado pelo GitHub Actions):
-// cria a base de dados D1 se não existir, aplica migrações, publica o Worker e os segredos definidos.
+// Publicação no Cloudflare (usada pelo GitHub Actions), a correr dentro da pasta de uma app:
+//   node ../scripts/publicar.mjs <base de dados> [SEGREDO=VARIAVEL_DO_GITHUB ...]
+// Cria a base de dados D1 se não existir, aplica migrações, publica o Worker e os segredos definidos.
 import { execFileSync } from "node:child_process";
 import { readFileSync, writeFileSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-const DB = "alojamento";
-// Opcionais: a configuração é feita no painel (ver wrangler.toml).
-const SEGREDOS = ["ADMIN_PASSWORD", "SESSION_SECRET", "CODIGO_CHAVES"];
+const [DB, ...mapa] = process.argv.slice(2);
+// Segredos opcionais: só os que estiverem definidos no GitHub são enviados.
+const SEGREDOS = mapa.map((m) => {
+  const [nome, variavel = nome] = m.split("=");
+  return { nome, variavel };
+});
 
 if (!process.env.CLOUDFLARE_API_TOKEN) {
   console.log("::warning::CLOUDFLARE_API_TOKEN não definido: publicação ignorada.");
@@ -39,9 +43,9 @@ writeFileSync("wrangler.toml", config);
 console.log(wrangler("d1", "migrations", "apply", DB, "--remote"));
 console.log(wrangler("deploy"));
 
-const definidos = SEGREDOS.filter((n) => process.env[n]);
+const definidos = SEGREDOS.filter((s) => process.env[s.variavel]);
 if (definidos.length) {
   const ficheiro = join(mkdtempSync(join(tmpdir(), "segredos-")), "segredos.json");
-  writeFileSync(ficheiro, JSON.stringify(Object.fromEntries(definidos.map((n) => [n, process.env[n]]))));
+  writeFileSync(ficheiro, JSON.stringify(Object.fromEntries(definidos.map((s) => [s.nome, process.env[s.variavel]]))));
   console.log(wrangler("secret", "bulk", ficheiro));
 }

@@ -59,3 +59,5 @@ button:disabled { opacity: .5; }
 .passos p { margin: 8px 0 0; white-space: pre-line; }
 .etiqueta { display: inline-block; font-size: .75rem; font-weight: 600; color: var(--marca); border: 1px solid var(--marca);
   border-radius: 999px; padding: 0 8px; margin-right: 6px; }
+.aviso { background: var(--cartao); border: 1px solid var(--hoje); border-left: 4px solid var(--hoje); border-radius: 8px; padding: 10px 12px; }
+.aviso a { color: inherit; text-decoration: none; }

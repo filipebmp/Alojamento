@@ -79,17 +79,26 @@ data da última comunicação.
 - [x] Migração dos dados da instalação atual sem perdas.
 
 ### Fase 2 — Plataforma comercial (bookgest.pt)
-- Página de apresentação, preços, registo.
-- Pagamento recorrente por alojamento (Stripe: cartão, Multibanco).
-  As faturas têm de sair de um programa **certificado pela AT** (InvoiceXpress,
-  Moloni…) ligado ao Stripe.
-- Servidor de licenças e de versões (versões assinadas).
-- Tirar o bookgest.pt do proxy Hetzner e servi-lo diretamente pelo Cloudflare.
+Código em `plataforma/`; passos de configuração em [PLATAFORMA.md](PLATAFORMA.md).
+- [x] Página de apresentação e preço (o botão de compra só aparece com `VENDAS_ABERTAS = "sim"`).
+- [x] Pagamento recorrente por alojamento com Stripe Checkout; alterações e
+  cancelamento no portal de cliente do Stripe (sem contas de utilizador próprias).
+- [x] Faturas-recibo emitidas no InvoiceXpress (certificado pela AT) a cada pagamento;
+  sem InvoiceXpress, ficam "por emitir" na página de gestão.
+- [x] Servidor de licenças: cada instalação comunica diariamente chave, versão e
+  n.º de alojamentos ativos; a app mostra avisos (sem bloquear nada).
+- [x] Página de gestão do fornecedor (`/gestao`): licenças, cortesias, faturas.
+- [ ] Configurar Stripe, InvoiceXpress e atividade nas Finanças (fornecedor).
+- [ ] Mudar o DNS do bookgest.pt para o Cloudflare e ligar o domínio à plataforma
+  (sai do proxy Hetzner).
 
 ### Fase 3 — Instalador e atualização automática
 - Assistente passo a passo (com capturas) para criar a conta Cloudflare e a chave.
 - Publicação inicial a partir do bookgest.pt; a chave fica como segredo na conta
   do gestor, não na plataforma.
+- Servidor de versões (versões assinadas).
+- Bloqueio de novos links de check-in com licença inativa ou alojamentos a mais
+  (depois de um período de aviso).
 - O instalador define a palavra-passe inicial (fecha a janela em que o assistente
   de primeiro arranque está aberto a quem chegar primeiro).
 - Atualização diária: verificar assinatura, aplicar migrações, publicar.

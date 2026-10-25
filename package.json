@@ -1,12 +1,12 @@
 {
-  "name": "gestao-alojamento-local",
+  "name": "bookgest",
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "wrangler dev",
-    "deploy": "wrangler deploy",
-    "db:migrate:local": "wrangler d1 migrations apply alojamento --local",
-    "db:migrate": "wrangler d1 migrations apply alojamento --remote",
+    "dev": "wrangler dev -c app/wrangler.toml",
+    "dev:plataforma": "wrangler dev -c plataforma/wrangler.toml",
+    "db:migrate:local": "wrangler d1 migrations apply alojamento --local -c app/wrangler.toml",
+    "db:migrate:plataforma:local": "wrangler d1 migrations apply plataforma --local -c plataforma/wrangler.toml",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },

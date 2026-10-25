@@ -18,8 +18,9 @@ import {
 } from "./db";
 import { configAlojamento, regrasTmt } from "./lib/concelhos";
 import { hojeLisboa } from "./lib/datas";
+import { type EstadoGuardado, URL_LICENCAS_PREDEFINIDO, avisoLicenca, consultarLicenca } from "./lib/licenca";
 import { estadoCodigo, mesesAteAnterior, ordenarPendentes, pendentesReserva, pendentesTmt } from "./lib/regras";
-import { SENHA_MINIMA, hashSenha, iguais, verificarSenha } from "./lib/senha";
+import { SENHA_MINIMA, hashSenha, iguais, verificarSenha } from "../../comum/senha";
 import { calcularTmt, cobraTmt } from "./lib/tmt";
 import type { Alojamento } from "./lib/tipos";
 import {
@@ -36,6 +37,7 @@ import {
   paginaTmt,
 } from "./views/admin";
 import { paginaHospede } from "./views/hospede";
+import { VERSAO } from "./versao";
 
 type Env = {
   DB: D1Database;
@@ -44,6 +46,7 @@ type Env = {
   SESSION_SECRET?: string;
   CODIGO_CHAVES?: string;
   URL_PUBLICO?: string;
+  URL_LICENCAS?: string; // servidor de licenças (predefinido: https://bookgest.pt)
 };
 
 type Ctx = Context<{ Bindings: Env }>;
@@ -154,7 +157,7 @@ function alojamentoDa(mapa: MapaAlojamentos, rc: ReservaCompleta): Alojamento {
 
 app.get("/admin", async (c) => {
   const agora = new Date();
-  const { reservas, alojamentos, mapa, declaracoes } = await carregarTudo(c.env.DB);
+  const [{ reservas, alojamentos, mapa, declaracoes }, licenca] = await Promise.all([carregarTudo(c.env.DB), lerLicenca(c.env.DB)]);
   if (!alojamentos.length) return c.redirect("/admin/alojamentos/novo");
   const pendentes = [
     ...reservas.flatMap((rc) => pendentesReserva(rc.reserva, rc.hospedes, rc.faturacao, configAlojamento(alojamentoDa(mapa, rc)), agora)),
@@ -162,7 +165,8 @@ app.get("/admin", async (c) => {
       pendentesTmt(mesesTmt(reservas, a.id, agora), declaracoes, { id: a.id, concelho: a.concelho, regras: regrasTmt(a) }),
     ),
   ];
-  return c.html(paginaPainel(ordenarPendentes(pendentes), reservas, mapa, agora));
+  const aviso = avisoLicenca(licenca.chave, licenca.estado, alojamentos.filter((a) => a.ativo).length, agora);
+  return c.html(paginaPainel(ordenarPendentes(pendentes), reservas, mapa, agora, aviso));
 });
 
 app.get("/admin/reservas/nova", async (c) => {
@@ -437,18 +441,58 @@ app.get("/admin/alojamentos/:id/instrucoes/:passo/imagem", (c) =>
 
 // ---------- Definições ----------
 
-app.get("/admin/definicoes", (c) => c.html(paginaDefinicoes({ guardado: c.req.query("guardado") === "1" })));
+async function mostrarDefinicoes(c: Ctx, opcoes: { erro?: string; guardado?: boolean } = {}) {
+  const licenca = await lerLicenca(c.env.DB);
+  const ativos = (await listarAlojamentos(c.env.DB)).filter((a) => a.ativo).length;
+  return c.html(
+    paginaDefinicoes({ ...opcoes, licenca: { ...licenca, aviso: avisoLicenca(licenca.chave, licenca.estado, ativos, new Date()) } }),
+    opcoes.erro ? 400 : 200,
+  );
+}
+
+app.get("/admin/definicoes", (c) => mostrarDefinicoes(c, { guardado: c.req.query("guardado") === "1" }));
 
 app.post("/admin/definicoes/senha", async (c) => {
   const b = await c.req.parseBody<Record<string, string>>();
-  if (!(await senhaCorreta(c, String(b.atual ?? "")))) return c.html(paginaDefinicoes({ erro: "A palavra-passe atual está errada." }), 400);
+  if (!(await senhaCorreta(c, String(b.atual ?? "")))) return mostrarDefinicoes(c, { erro: "A palavra-passe atual está errada." });
   const erro = validarNovaSenha(b.senha, b.confirmar);
-  if (erro) return c.html(paginaDefinicoes({ erro }), 400);
+  if (erro) return mostrarDefinicoes(c, { erro });
   await gravarDefinicao(c.env.DB, "senha", await hashSenha(b.senha));
   await gravarDefinicao(c.env.DB, "versao_sessao", gerarToken());
   await abrirSessao(c);
   return c.redirect("/admin/definicoes?guardado=1");
 });
+
+app.post("/admin/definicoes/licenca", async (c) => {
+  const { chave } = await c.req.parseBody<{ chave: string }>();
+  const limpa = String(chave ?? "").trim().toUpperCase();
+  if (!/^[A-Z0-9-]{8,64}$/.test(limpa)) return mostrarDefinicoes(c, { erro: "Chave de licença inválida." });
+  await gravarDefinicao(c.env.DB, "licenca_chave", limpa);
+  await c.env.DB.prepare("DELETE FROM definicoes WHERE chave = 'licenca_estado'").run();
+  await verificarLicenca(c.env);
+  return c.redirect("/admin/definicoes");
+});
+
+// ---------- Licença ----------
+
+async function lerLicenca(db: D1Database): Promise<{ chave: string | null; estado: EstadoGuardado | null }> {
+  const [chave, estado] = await Promise.all([lerDefinicao(db, "licenca_chave"), lerDefinicao(db, "licenca_estado")]);
+  return { chave, estado: estado ? (JSON.parse(estado) as EstadoGuardado) : null };
+}
+
+// Corre uma vez por dia (cron) e ao guardar a chave. Sem resposta, mantém o último estado conhecido.
+async function verificarLicenca(env: Env): Promise<void> {
+  const chave = await lerDefinicao(env.DB, "licenca_chave");
+  if (!chave) return;
+  const alojamentos = (await env.DB.prepare("SELECT COUNT(*) AS n FROM alojamentos WHERE ativo = 1").first<number>("n")) ?? 0;
+  try {
+    const r = await consultarLicenca(env.URL_LICENCAS || URL_LICENCAS_PREDEFINIDO, { chave, versao: VERSAO, alojamentos });
+    const guardado: EstadoGuardado = { estado: r.estado, alojamentosPagos: r.alojamentosPagos, verificadoEm: new Date().toISOString() };
+    await gravarDefinicao(env.DB, "licenca_estado", JSON.stringify(guardado));
+  } catch (e) {
+    console.error("Verificação da licença falhou", e);
+  }
+}
 
 // ---------- Página do hóspede ----------
 
@@ -614,4 +658,9 @@ function cents(v: string | undefined): number | null {
   return Number.isFinite(n) ? Math.round(n * 100) : null;
 }
 
-export default app;
+export default {
+  fetch: app.fetch,
+  async scheduled(_evento: ScheduledController, env: Env, ctx: ExecutionContext) {
+    ctx.waitUntil(prepararInstalacao(env.DB, env.CODIGO_CHAVES).then(() => verificarLicenca(env)));
+  },
+} satisfies ExportedHandler<Env>;

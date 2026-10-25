@@ -2,8 +2,9 @@ import { html } from "hono/html";
 import type { ReservaCompleta } from "../db";
 import { hojeLisboa } from "../lib/datas";
 import { CONCELHOS, regrasTmt } from "../lib/concelhos";
+import type { EstadoGuardado } from "../lib/licenca";
 import { type Pendente, eEstrangeiro, euros, hospedeCompleto, prazosTmt } from "../lib/regras";
-import { SENHA_MINIMA } from "../lib/senha";
+import { SENHA_MINIMA } from "../../../comum/senha";
 import { calcularTmt, cobraTmt } from "../lib/tmt";
 import type { Alojamento, DeclaracaoTmt, Passo } from "../lib/tipos";
 import { dataPt, pagina } from "./layout";
@@ -24,7 +25,13 @@ function classePrazo(prazo: string | null, hoje: string): string {
   return "";
 }
 
-export function paginaPainel(pendentes: Pendente[], reservas: ReservaCompleta[], alojamentos: Map<number, Alojamento>, agora: Date) {
+export function paginaPainel(
+  pendentes: Pendente[],
+  reservas: ReservaCompleta[],
+  alojamentos: Map<number, Alojamento>,
+  agora: Date,
+  avisoLicenca: string | null,
+) {
   const hoje = hojeLisboa(agora);
   const proximas = reservas.filter((rc) => !rc.reserva.cancelada && rc.reserva.checkout >= hoje).reverse();
   const passadas = reservas.filter((rc) => rc.reserva.cancelada || rc.reserva.checkout < hoje).slice(0, 20);
@@ -35,6 +42,7 @@ export function paginaPainel(pendentes: Pendente[], reservas: ReservaCompleta[],
       ${etiqueta(r.alojamento_id)}<strong>${r.nome_titular}</strong> ${dataPt(r.checkin)} → ${dataPt(r.checkout)}${r.cancelada ? " (cancelada)" : ""}</a></li>`;
 
   return pagina("Painel", html`
+    ${avisoLicenca ? html`<p class="aviso"><a href="/admin/definicoes">${avisoLicenca}</a></p>` : ""}
     <h1>Pendentes</h1>
     ${pendentes.length
       ? html`<ul class="pendentes">${pendentes.map((p) => html`<li class="${classePrazo(p.prazo, hoje)}">
@@ -302,12 +310,32 @@ export function paginaConfigurar(erro?: string) {
     </form>`);
 }
 
-export function paginaDefinicoes(opcoes: { erro?: string; guardado?: boolean } = {}) {
+const NOMES_ESTADO_LICENCA = { ativa: "ativa", pagamento_em_atraso: "pagamento em atraso", inativa: "inativa", desconhecida: "não reconhecida" };
+
+export function paginaDefinicoes(opcoes: {
+  erro?: string;
+  guardado?: boolean;
+  licenca: { chave: string | null; estado: EstadoGuardado | null; aviso: string | null };
+}) {
+  const { chave, estado, aviso } = opcoes.licenca;
   return pagina("Definições", html`<h1>Definições</h1>
     ${opcoes.guardado ? html`<p>✅ Palavra-passe alterada. As sessões noutros dispositivos foram terminadas.</p>` : ""}
+    ${opcoes.erro ? html`<p class="erro">${opcoes.erro}</p>` : ""}
+    <section class="cartao">
+      <h2>Licença</h2>
+      ${estado
+        ? html`<p>Estado: <strong>${NOMES_ESTADO_LICENCA[estado.estado]}</strong> · ${estado.alojamentosPagos} alojamento(s) incluído(s)<br>
+            <small>Verificada em ${dataPt(estado.verificadoEm)}</small></p>`
+        : chave ? html`<p class="nota">Ainda não foi possível verificar a licença.</p>` : ""}
+      ${aviso ? html`<p class="erro">${aviso}</p>` : ""}
+      <form method="post" action="/admin/definicoes/licenca">
+        <label>Chave de licença <input name="chave" required value="${chave ?? ""}" placeholder="BG-XXXX-XXXX-XXXX-XXXX" autocapitalize="characters"></label>
+        <button type="submit">Guardar e verificar</button>
+      </form>
+      <p class="nota">A sua instalação só envia ao bookgest a chave, a versão e o número de alojamentos ativos.</p>
+    </section>
     <section class="cartao">
       <h2>Palavra-passe</h2>
-      ${opcoes.erro ? html`<p class="erro">${opcoes.erro}</p>` : ""}
       <form method="post" action="/admin/definicoes/senha">
         <label>Palavra-passe atual <input type="password" name="atual" required autocomplete="current-password"></label>
         ${camposNovaSenha()}
