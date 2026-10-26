@@ -17,6 +17,7 @@ const ICONES = {
   moeda: '<circle cx="12" cy="12" r="9"/><path d="M15.5 8.5a4 4 0 1 0 0 7M7 11h6M7 13.5h6"/>',
   predios: '<path d="M4 21V8l8-5 8 5v13"/><path d="M9 21v-6h6v6"/>',
   pessoa: '<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
+  ine: '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
   cadeado: '<rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
   visto: '<path d="M5 12l5 5 9-10"/>',
 } as const;
@@ -42,7 +43,7 @@ export function pagina(
   ${opcoes.descricao ? html`<meta name="description" content="${opcoes.descricao}">` : ""}
   ${opcoes.gestao ? html`<meta name="robots" content="noindex">` : ""}
   <link rel="icon" href="/icon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="/site.css?v=2">
+  <link rel="stylesheet" href="/site.css?v=3">
 </head>
 <body>
   <header class="topo"><div class="topo-dentro">
@@ -92,6 +93,28 @@ const FUNCIONALIDADES: [Parameters<typeof icone>[0], string, string][] = [
   ["pessoa", "Equipa", "Dê acesso a quem faz as limpezas ou recebe os hóspedes, sem mostrar documentos, faturação ou valores."],
 ];
 
+// Secção "Em detalhe": o que cada obrigação faz, com os pontos principais.
+const DETALHES: [Parameters<typeof icone>[0], string, string, string[]][] = [
+  ["escudo", "Comunicação ao SIBA",
+    "Assim que o check-in fica completo, os boletins de alojamento dos hóspedes estrangeiros são enviados ao webservice oficial do SIBA. A resposta do SIBA fica registada na reserva e, se algo falhar, vê o motivo concreto e pode reenviar. Se o hóspede não preencher o check-in, o bookgest avisa antes do fim do prazo legal.",
+    ["Envio sem escrever nada duas vezes", "Chegadas futuras ficam agendadas e seguem no dia do check-in", "Estado visível em cada reserva: enviado, agendado ou com o erro explicado"]],
+  ["ine", "Relatório do INE (IPHH)",
+    "O inquérito mensal do INE pede hóspedes e dormidas por país de residência, a utilização do alojamento e o volume de negócios. O bookgest tem esses dados do check-in e apresenta-os já somados, prontos a transcrever para o WebInq, com lembrete até ao dia 10 de cada mês.",
+    ["Hóspedes e dormidas por país, com as estadias que atravessam meses divididas corretamente", "Utilizações e volume de negócios sem IVA e sem taxa turística, por mês", "Exportação em CSV"]],
+  ["moeda", "Taxa turística",
+    "A taxa é calculada por estadia segundo as regras do concelho do alojamento, com a isenção por idade, o limite de noites e os valores de época alta e baixa. Os 308 concelhos estão na lista, com os valores de referência dos que cobram taxa. Tem o resumo mensal por alojamento para declarar à câmara.",
+    ["Preenchida automaticamente ao escolher o concelho", "Dormidas tributáveis, não sujeitas e isentas, como a câmara pede", "Lembretes dos prazos de declaração e de pagamento"]],
+  ["recibo", "Fatura-recibo",
+    "Com o InvoiceXpress, o Vendus ou o TOConline ligados, a fatura-recibo de cada reserva é emitida com um clique, com o IVA certo e a taxa turística à parte. Sem programa de faturação, o bookgest prepara todos os campos para copiar para o Portal das Finanças, gratuito.",
+    ["Dados de faturação pedidos ao hóspede no check-in", "IVA de 6%, 5% (Madeira), 4% (Açores) ou isenção do art. 53.º", "Prazo da fatura à vista em cada reserva"]],
+  ["calendario", "Reservas do Booking e do Airbnb",
+    "Ligue o calendário (iCal) de cada plataforma e as reservas entram sozinhas, num calendário com todos os alojamentos. Reencaminhe os emails de confirmação e o bookgest completa o nome, os hóspedes e os valores.",
+    ["Sem reservas duplicadas nem esquecidas", "Avisa quando uma reserva desaparece do calendário (cancelamento)", "Reservas diretas criadas em segundos"]],
+  ["chave", "Check-in online e código das chaves",
+    "O hóspede preenche os seus dados e os dos acompanhantes no telemóvel, em português ou inglês. O código do cofre e as instruções de chegada, com fotos, só aparecem depois do check-in completo e perto da hora de entrada.",
+    ["Link enviado por WhatsApp num toque", "Lista de países e documentos sem erros de escrita", "Aviso dos dados de hóspedes em falta"]],
+];
+
 // Ecrã "Hoje" do painel, com dados de exemplo, desenhado em HTML para ficar nítido em qualquer ecrã.
 const TELEMOVEL = html`<div class="telemovel" role="img" aria-label="O ecrã Hoje do bookgest num telemóvel: entradas, saídas, ocupação, tarefas e próximas chegadas">
   <div class="ecra" aria-hidden="true">
@@ -139,6 +162,15 @@ export function paginaInicio(d: DadosSite) {
       <div class="grelha">
         ${FUNCIONALIDADES.map(([i, t, x]) => html`<div class="cartao funcao"><span class="simbolo">${icone(i)}</span><h3>${t}</h3><p>${x}</p></div>`)}
       </div>
+    </section>
+
+    <section class="seccao" id="em-detalhe">
+      <h2>Em detalhe</h2>
+      <p class="lead">As obrigações de um Alojamento Local, tratadas a partir dos dados que o hóspede já preencheu.</p>
+      ${DETALHES.map(([i, t, texto, pontos]) => html`<article class="detalhe">
+        <div><span class="simbolo">${icone(i)}</span><h3>${t}</h3><p>${texto}</p></div>
+        <ul>${pontos.map((p) => html`<li>${icone("visto", 18)}<span>${p}</span></li>`)}</ul>
+      </article>`)}
     </section>
 
     <section class="seccao">
