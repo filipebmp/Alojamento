@@ -289,6 +289,7 @@ export function paginaLicencas(
   ultimaVersao?: string | null,
 ) {
   return pagina("Licenças", html`<h1>Licenças</h1>
+    <p class="nota">Versão atual da app: <strong>${ultimaVersao ?? "nenhuma publicada"}</strong></p>
     ${novaChave ? html`<p>✅ Licença de cortesia criada:</p><p class="chave">${novaChave}</p>` : ""}
     ${mensagem ? html`<p class="${mensagem.ok ? "" : "erro"}">${mensagem.ok ? "✅ " : "⚠️ "}${mensagem.texto}</p>` : ""}
     <details class="cartao" ${config.every((x) => x.ok) ? "" : "open"}>
