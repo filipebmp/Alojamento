@@ -753,7 +753,7 @@ export function paginaAlojamento(
     ${opcoes.guardado ? html`<p>✅ Guardado.</p>` : ""}
     ${opcoes.erro ? html`<p class="erro">${opcoes.erro}</p>` : ""}
     ${a ? html`<p><a class="botao" href="/admin/alojamentos/${a.id}/instrucoes">Instruções de chegada</a></p>` : ""}
-    <form method="post" action="${a ? `/admin/alojamentos/${a.id}` : "/admin/alojamentos"}">
+    <form method="post" action="${a ? `/admin/alojamentos/${a.id}` : "/admin/alojamentos"}" id="dados-alojamento">
       <section class="cartao">
         <h2>Identificação</h2>
         <label>Nome <input name="nome" required value="${v(a?.nome)}" placeholder="Ex.: Casa da Praia"></label>
@@ -832,21 +832,23 @@ export function paginaAlojamento(
           <select name="regime_iva">${REGIMES_IVA.map((x) => html`<option value="${x.valor}"${(a?.regime_iva ?? "6") === x.valor ? " selected" : ""}>${x.nome}</option>`)}</select></label>
         <p class="nota">Como está registado nas Finanças. Usado para preparar a fatura-recibo de cada reserva.</p>
       </section>
-      <button type="submit">${a ? "Guardar" : "Criar alojamento"}</button>
     </form>
-    ${a
-      ? html`<form method="post" action="/admin/alojamentos/${a.id}/${a.ativo ? "arquivar" : "reativar"}"
-          ${a.ativo ? html`onsubmit="return confirm('Arquivar este alojamento? Deixa de aparecer nas novas reservas; os dados são conservados.')"` : ""}>
-          <button class="${a.ativo ? "perigo" : ""}">${a.ativo ? "Arquivar alojamento" : "Reativar alojamento"}</button></form>
-        ${opcoes.reservas === 0
-          ? html`<form method="post" action="/admin/alojamentos/${a.id}/apagar"
-              onsubmit="return confirm('Apagar este alojamento de vez? Não tem reservas; as instruções de chegada e os calendários ligados também são apagados.')">
-              <button class="perigo">Apagar alojamento</button></form>
-            <p class="nota">Pode apagar porque não tem reservas. Um alojamento com reservas só pode ser arquivado.</p>`
-          : ""}`
-      : ""}
     ${a ? seccaoCalendarios(a, opcoes.calendarios ?? []) : ""}
     ${a ? seccaoSiba(a, opcoes.siba ?? null, opcoes.erroSiba) : ""}
+    <div class="acoes-fim">
+      <button type="submit" form="dados-alojamento">${a ? "Guardar alterações" : "Criar alojamento"}</button>
+      ${a
+        ? html`<form method="post" action="/admin/alojamentos/${a.id}/${a.ativo ? "arquivar" : "reativar"}"
+            ${a.ativo ? html`onsubmit="return confirm('Arquivar este alojamento? Deixa de aparecer nas novas reservas; os dados são conservados.')"` : ""}>
+            <button class="${a.ativo ? "perigo" : "secundario"}">${a.ativo ? "Arquivar alojamento" : "Reativar alojamento"}</button></form>
+          ${opcoes.reservas === 0
+            ? html`<form method="post" action="/admin/alojamentos/${a.id}/apagar"
+                onsubmit="return confirm('Apagar este alojamento de vez? Não tem reservas; as instruções de chegada e os calendários ligados também são apagados.')">
+                <button class="perigo">Apagar alojamento</button></form>`
+            : ""}`
+        : ""}
+    </div>
+    ${a && opcoes.reservas === 0 ? html`<p class="nota">Pode apagar porque não tem reservas. Um alojamento com reservas só pode ser arquivado.</p>` : ""}
     ${SCRIPT_CONCELHO}`, { admin: true, seccao: "alojamentos", voltar: "/admin/alojamentos" });
 }
 
@@ -879,7 +881,7 @@ function seccaoSiba(a: Alojamento, s: ConfigSiba | null, erro?: string) {
           <option value="0"${s && !s.teste ? " selected" : ""}>Produção (envio real)</option>
         </select></label>
       <p class="nota">A morada enviada é a da identificação do alojamento. Comece em testes; quando o SIBA aceitar os envios, mude para produção.</p>
-      <button type="submit">Guardar</button>
+      <button type="submit" class="secundario">Guardar dados do SIBA</button>
     </form>
   </section>`;
 }

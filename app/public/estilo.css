@@ -89,6 +89,8 @@ button.ligacao:hover { background: var(--neutro-suave); }
 .entrada .cartao { padding: 20px 22px; }
 .botoes, .linha { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .botoes form { margin: 0; }
+.acoes-fim { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 24px 0 8px; padding-top: 16px; border-top: 1px solid var(--borda); }
+.acoes-fim form, .acoes-fim button { margin: 0; }
 .linha input, .linha select { flex: 1; min-width: 10em; margin: 8px 0 0; }
 
 /* ---------- Cartões e listas ---------- */
