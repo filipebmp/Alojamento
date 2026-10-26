@@ -949,9 +949,15 @@ export function paginaEmails(o: { endereco: string | null; privado: boolean; ema
           <button type="button" data-texto="${o.endereco}" onclick="navigator.clipboard.writeText(this.dataset.texto).then(() => this.textContent = 'Copiado ✓')">Copiar</button>
           <details><summary>Como configurar</summary>
             <p><strong>Booking:</strong> Extranet → Propriedade → Detalhes de contacto → acrescentar este endereço aos contactos que recebem as reservas.</p>
-            <p><strong>Airbnb</strong> (envia só para o email da conta): no Gmail → Definições → Filtros → criar filtro com
-              <em>De: automated@airbnb.com</em> → Reencaminhar para este endereço. O Gmail pede confirmação: o código aparece
-              aqui em baixo uns minutos depois. No Outlook: Regras → Reencaminhar.</p>
+            <p><strong>Airbnb</strong> (envia só para o email da conta), no Gmail no computador:</p>
+            <ol>
+              <li>⚙️ Definições → Ver todas as definições → <strong>Encaminhamento e POP/IMAP</strong> → Adicionar um endereço de encaminhamento → colar este endereço.</li>
+              <li>O Gmail envia um email de confirmação para cá: carregue em <strong>Verificar emails agora</strong> e o código e o link aparecem em baixo.</li>
+              <li>Abra o link (ou escreva o código no Gmail) para confirmar.</li>
+              <li>Na pesquisa do Gmail: <code>from:automated@airbnb.com</code> → Criar filtro → <strong>Encaminhar para</strong> este endereço → Criar filtro.</li>
+            </ol>
+            <p class="nota">Não escolha "Encaminhar uma cópia do correio recebido": só o filtro do Airbnb. No Outlook: Definições → Correio → Regras → Reencaminhar.
+              Mais detalhes na <a href="/admin/ajuda#emails">Ajuda</a>.</p>
           </details>
           ${o.privado
             ? html`<p class="nota">ℹ️ A sua instalação está numa conta Cloudflare sua: ao reencaminhar, os emails de reserva passam

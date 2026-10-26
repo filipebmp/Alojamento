@@ -83,6 +83,7 @@ import { faturaPortal, nomePais, regimeIvaValido } from "./lib/faturacao";
 import { paisValido } from "./lib/paises";
 import { MODALIDADES, TIPOLOGIAS, csvIne, relatorioIne } from "./lib/ine";
 import { capacidadeIne, paginaIne } from "./views/ine";
+import { paginaAjuda } from "./views/ajuda";
 import { nomeMes } from "./views/layout";
 import { type ConfigSiba, validarConfigSiba } from "./lib/siba";
 import { enviarPendentesSiba, enviarReservaSiba, lerConfigSiba } from "./lib/siba-envio";
@@ -457,6 +458,8 @@ app.get("/admin/reservas", async (c) => {
 });
 
 app.get("/admin/mais", (c) => c.html(paginaMais()));
+
+app.get("/admin/ajuda", (c) => c.html(paginaAjuda(papel(c))));
 
 // ---------- INE (inquérito mensal IPHH) ----------
 

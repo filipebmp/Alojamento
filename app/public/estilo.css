@@ -254,3 +254,13 @@ dd { margin: 0; overflow-wrap: anywhere; }
 .campo-copiar .texto small { display: block; font-size: .8rem; }
 .campo-copiar button { margin: 0; min-height: 40px; padding: 6px 12px; font-size: .87rem; flex-shrink: 0; }
 .campo-copiar button.copiado { background: var(--marca-suave); color: var(--marca); border-color: var(--marca); }
+
+/* ---------- Ajuda ---------- */
+.ajuda h2 { display: flex; align-items: center; gap: 8px; margin-top: 28px; }
+.ajuda h2 .icone { color: var(--marca); }
+.ajuda details { background: var(--cartao); border: 1px solid var(--borda); border-radius: 12px; margin: 8px 0; box-shadow: var(--sombra); }
+.ajuda summary { padding: 13px 16px; font-weight: 600; cursor: pointer; min-height: 44px; }
+.ajuda details > div { padding: 0 16px 6px; }
+.ajuda details > div p, .ajuda details > div ol, .ajuda details > div ul { margin: 0 0 12px; }
+.ajuda li { margin: 4px 0; }
+code { font-size: .88em; background: var(--neutro-suave); padding: 1px 5px; border-radius: 5px; }
