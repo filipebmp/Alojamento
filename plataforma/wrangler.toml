@@ -44,7 +44,7 @@ ENCAMINHAR_EMAILS = "filipebmp@gmail.com"
 # "sim" para mostrar o botão de compra (exige também STRIPE_PRECO e STRIPE_SECRET_KEY)
 VENDAS_ABERTAS = "sim"
 # Id do preço mensal por alojamento no Stripe (price_…), com IVA incluído
-STRIPE_PRECO = "price_1UUkF9JxtnFlNZypmsyxEBct"
+STRIPE_PRECO = "price_1UUnrfFPn3y23DjETSiaFreD"
 # Chave publicável do Stripe (pk_test_… ou pk_live_…, do mesmo modo que STRIPE_SECRET_KEY), usada pelo formulário de
 # pagamento embutido no site. Não é segredo. Vazio = vendas fechadas (o botão Subscrever não aparece).
 STRIPE_PUBLISHABLE_KEY = "pk_live_51UUSGZFPn3y23DjERzJAxIMNxSPdZF9xpowvaD0qo12A39ciaQ45uBqIKX475XG2GNpMnqzEN6CqMwvrUGNaKL6a00b0t4dRwW"
