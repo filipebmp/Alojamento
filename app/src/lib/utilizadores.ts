@@ -13,6 +13,7 @@ export interface Utilizador {
   criado_em: string;
   ultimo_acesso: string | null;
   avisos_email: number;
+  ajuda_ignorada: number;
 }
 
 export function emailValido(email: string | undefined): string | null {

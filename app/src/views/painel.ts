@@ -117,6 +117,7 @@ export function paginaHoje(o: {
   numeros: NumerosHoje;
   aviso: string | null;
   papel: Papel;
+  boasVindas?: boolean;
 }) {
   const nomes = new Map(o.alojamentos.map((a) => [a.id, a.nome]));
   const nome = (id: number | undefined) => (o.alojamentos.length > 1 && id != null ? nomes.get(id) ?? null : null);
@@ -130,6 +131,16 @@ export function paginaHoje(o: {
 
   return pagina("Hoje", html`
     ${o.aviso ? html`<p class="aviso"><a href="/admin/definicoes">${o.aviso}</a></p>` : ""}
+    ${o.boasVindas
+      ? html`<div class="boas-vindas">
+          <span class="simbolo ok">${icone("ajuda", 18)}</span>
+          <p><strong>Bem-vindo ao bookgest!</strong> Veja os primeiros passos para pôr tudo a funcionar.</p>
+          <div class="botoes">
+            <a class="botao" href="/admin/ajuda#comecar">Ver primeiros passos</a>
+            <form method="post" action="/admin/ajuda/ignorar"><button class="secundario">Ignorar</button></form>
+          </div>
+        </div>`
+      : ""}
     <div class="cabecalho">
       <div><p class="sobre">${dataExtenso(o.hoje)}</p><h1>Hoje</h1></div>
       <div class="botoes so-computador"><a class="botao" href="/admin/reservas/nova">${icone("mais_reserva", 18)}Nova reserva</a></div>

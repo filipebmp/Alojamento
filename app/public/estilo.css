@@ -264,3 +264,12 @@ dd { margin: 0; overflow-wrap: anywhere; }
 .ajuda details > div p, .ajuda details > div ol, .ajuda details > div ul { margin: 0 0 12px; }
 .ajuda li { margin: 4px 0; }
 code { font-size: .88em; background: var(--neutro-suave); padding: 1px 5px; border-radius: 5px; }
+
+/* ---------- Boas-vindas (ecrã Hoje) ---------- */
+.boas-vindas { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; background: var(--marca-suave); border: 1px solid var(--marca);
+  border-radius: var(--raio); padding: 14px 16px; margin: 4px 0 16px; }
+.boas-vindas p { flex: 1 1 200px; margin: 0; }
+.boas-vindas .botoes { flex: 1 1 100%; }
+.boas-vindas .botoes .botao, .boas-vindas .botoes button { margin: 0; }
+@media (max-width: 639px) { .boas-vindas .simbolo { display: none; } }
+@media (min-width: 640px) { .boas-vindas .botoes { flex: 0 0 auto; } }

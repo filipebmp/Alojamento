@@ -425,6 +425,7 @@ app.get("/admin", async (c) => {
     numeros: numerosHoje(reservasFiltradas.map((rc) => rc.reserva), filtro == null ? ativos.length : 1, hoje),
     aviso,
     papel: p,
+    boasVindas: !c.get("utilizador").ajuda_ignorada,
   }));
 });
 
@@ -469,6 +470,11 @@ app.get("/admin/reservas", async (c) => {
 app.get("/admin/mais", (c) => c.html(paginaMais()));
 
 app.get("/admin/ajuda", (c) => c.html(paginaAjuda(papel(c))));
+
+app.post("/admin/ajuda/ignorar", async (c) => {
+  await c.env.DB.prepare("UPDATE utilizadores SET ajuda_ignorada = 1 WHERE id = ?").bind(c.get("utilizador").id).run();
+  return c.redirect("/admin");
+});
 
 // ---------- INE (inquérito mensal IPHH) ----------
 
