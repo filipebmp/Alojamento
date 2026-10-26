@@ -29,7 +29,7 @@ URL_PUBLICO = "https://bookgest.pt"
 # Email de contacto mostrado no site
 CONTACTO = "geral@bookgest.pt"
 # "sim" para aceitar registos com 30 dias grátis, alojados na conta do fornecedor (exige Resend e CF_API_TOKEN)
-REGISTOS_ABERTOS = "nao"
+REGISTOS_ABERTOS = "sim"
 # Subdomínio workers.dev da conta do fornecedor (endereços das instalações alojadas: bk-<nome>.<subdomínio>.workers.dev)
 CF_SUBDOMINIO = "filipebmp"
 # Instalações alojadas em <nome>.bookgest.pt (as existentes mudam na tarefa horária). Vazio = workers.dev.
