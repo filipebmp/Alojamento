@@ -1337,6 +1337,7 @@ async function verificarLicenca(env: Env): Promise<void> {
       fimTeste: r.fimTeste ?? null,
       emailReservas: r.emailReservas ?? null,
       verificadoEm: new Date().toISOString(),
+      versao: VERSAO,
     };
     await gravarDefinicao(env.DB, "licenca_estado", JSON.stringify(guardado));
     await env.DB.prepare("DELETE FROM definicoes WHERE chave = 'licenca_erro'").run();
@@ -1607,8 +1608,11 @@ export default {
       await enviarPendentesSiba(env.DB).catch((e) => console.error("SIBA", e));
       await enviarAvisosDiarios(env).catch((e) => console.error("Avisos", e));
       const estado = await lerDefinicao(env.DB, "licenca_estado");
-      const ultima = estado ? Date.parse((JSON.parse(estado) as EstadoGuardado).verificadoEm) : 0;
-      if (Date.now() - ultima > 20 * 3_600_000 || (await lerDefinicao(env.DB, "licenca_erro"))) await verificarLicenca(env);
+      const guardado = estado ? (JSON.parse(estado) as EstadoGuardado) : null;
+      const ultima = guardado ? Date.parse(guardado.verificadoEm) : 0;
+      if (Date.now() - ultima > 20 * 3_600_000 || guardado?.versao !== VERSAO || (await lerDefinicao(env.DB, "licenca_erro"))) {
+        await verificarLicenca(env);
+      }
     })());
   },
 } satisfies ExportedHandler<Env>;

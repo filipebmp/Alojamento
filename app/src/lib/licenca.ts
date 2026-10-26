@@ -13,6 +13,7 @@ export const URL_LICENCAS_PREDEFINIDO = "https://bookgest.pt";
 
 export interface EstadoGuardado extends RespostaLicenca {
   verificadoEm: string;
+  versao?: string; // versão da app que fez a verificação (ao mudar, volta a verificar e comunica a nova)
 }
 
 // Pergunta ao servidor de licenças pelo estado da chave. Envia só chave, versão e n.º de alojamentos ativos.
