@@ -49,7 +49,7 @@ export function pagina(
   <header class="topo"><div class="topo-dentro">
     <a href="${opcoes.gestao ? "/gestao" : "/"}" class="marca"><span class="logo">${icone("casa", 17)}</span>bookgest${opcoes.gestao ? html` <small>· gestão</small>` : ""}</a>
     ${opcoes.gestao
-      ? html`<nav><a href="/gestao">Licenças</a><a href="/gestao/faturas">Faturas</a></nav>`
+      ? opcoes.naEntrada ? "" : html`<nav><a href="/gestao">Licenças</a><a href="/gestao/faturas">Faturas</a></nav>`
       : html`<nav><a class="opcional" href="/#funcionalidades">Funcionalidades</a><a class="opcional" href="/#precos">Preço</a>
           ${opcoes.portal ? html`<a class="opcional" href="${opcoes.portal}">Assinatura</a>` : ""}${opcoes.naEntrada ? "" : html`<a href="/entrar">Entrar</a>`}
           ${opcoes.experimentar ? html`<a class="botao" href="/registar">Experimentar</a>` : ""}</nav>`}
@@ -269,7 +269,7 @@ export function paginaEntrar(erro?: string) {
     <form method="post" action="/gestao/entrar">
       <label>Palavra-passe <input type="password" name="password" required autofocus></label>
       <button type="submit">Entrar</button>
-    </form>`, { gestao: true, estreito: true });
+    </form>`, { gestao: true, estreito: true, naEntrada: true });
 }
 
 const NOMES_ESTADO = { ativa: "ativa", pagamento_em_atraso: "pagamento em atraso", inativa: "inativa", desconhecida: "desconhecida" };
