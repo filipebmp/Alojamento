@@ -49,7 +49,7 @@ STRIPE_PRECO = "price_1UUnrfFPn3y23DjETSiaFreD"
 # pagamento embutido no site. Não é segredo. Vazio = vendas fechadas (o botão Subscrever não aparece).
 STRIPE_PUBLISHABLE_KEY = "pk_live_51UUSGZFPn3y23DjERzJAxIMNxSPdZF9xpowvaD0qo12A39ciaQ45uBqIKX475XG2GNpMnqzEN6CqMwvrUGNaKL6a00b0t4dRwW"
 # Link de acesso ao portal do cliente do Stripe (Settings → Billing → Customer portal), para alterar ou cancelar
-STRIPE_PORTAL = "https://billing.stripe.com/p/login/test_cNieVe9NZglngtmbgI3gk00"
+STRIPE_PORTAL = "https://billing.stripe.com/p/login/14A6oH0xp3J46GT9pP6Na00"
 # Subdomínio da conta InvoiceXpress (<conta>.app.invoicexpress.com) e nome do imposto a aplicar
 INVOICEXPRESS_CONTA = ""
 INVOICEXPRESS_IMPOSTO = "IVA23"
