@@ -52,7 +52,7 @@ import {
   obterLicencaPorChave,
   registarComunicacao,
 } from "./licencas";
-import { type CheckoutSession, type Evento, type Invoice, type Price, type Subscription, assinaturaValida, stripe } from "./stripe";
+import { type CheckoutSession, ErroStripe, type Evento, type Invoice, type Price, type Subscription, assinaturaValida, stripe } from "./stripe";
 import {
   paginaAssinar,
   paginaCriar,
@@ -767,7 +767,10 @@ app.get("/gestao", async (c) => {
   const email = c.req.query("email");
   const mensagem = email === "enviado"
     ? { ok: true, texto: `Chave enviada por email para ${c.req.query("para") ?? ""}.` }
-    : email ? { ok: false, texto: `O email não foi enviado: ${email}` } : undefined;
+    : email ? { ok: false, texto: `O email não foi enviado: ${email}` }
+    : c.req.query("ok") ? { ok: true, texto: c.req.query("ok")!.slice(0, 200) }
+    : c.req.query("erro") ? { ok: false, texto: c.req.query("erro")!.slice(0, 300) }
+    : undefined;
   return mostrarLicencas(c, chave ?? undefined, mensagem);
 });
 
@@ -818,11 +821,29 @@ app.post("/gestao/licencas/:id/enviar", async (c) => {
 });
 
 // Só cortesias que nunca foram usadas por uma instalação (ex.: criadas por engano).
+// Só licenças que nenhuma instalação usou (criadas por engano ou em testes). Uma assinatura do Stripe é cancelada
+// primeiro; as faturas ficam (são registos fiscais), só deixam de apontar para a licença.
 app.post("/gestao/licencas/:id/apagar", async (c) => {
-  await c.env.DB.prepare("DELETE FROM licencas WHERE id = ? AND tipo = 'cortesia' AND ultima_comunicacao IS NULL")
-    .bind(Number(c.req.param("id")))
-    .run();
-  return c.redirect("/gestao");
+  const id = Number(c.req.param("id"));
+  const l = await c.env.DB.prepare("SELECT * FROM licencas WHERE id = ? AND ultima_comunicacao IS NULL AND url_instalacao IS NULL").bind(id).first<Licenca>();
+  if (!l) return c.redirect("/gestao");
+  if (l.stripe_subscription_id && !["canceled", "incomplete_expired"].includes(l.stripe_estado ?? "")) {
+    try {
+      await stripe(c.env.STRIPE_SECRET_KEY!, "DELETE", `/subscriptions/${l.stripe_subscription_id}`);
+    } catch (e) {
+      if (!(e instanceof ErroStripe) || !/No such subscription|canceled/i.test(e.message)) {
+        return c.redirect(`/gestao?${new URLSearchParams({ erro: `A assinatura no Stripe não foi cancelada: ${e instanceof Error ? e.message : e}` })}`);
+      }
+    }
+  }
+  await c.env.DB.batch([
+    c.env.DB.prepare("UPDATE faturas SET licenca_id = NULL WHERE licenca_id = ?").bind(id),
+    c.env.DB.prepare("UPDATE registos SET licenca_id = NULL WHERE licenca_id = ?").bind(id),
+    c.env.DB.prepare("DELETE FROM envios_email WHERE licenca_id = ?").bind(id),
+    c.env.DB.prepare("DELETE FROM emails_reservas WHERE licenca_id = ?").bind(id),
+    c.env.DB.prepare("DELETE FROM licencas WHERE id = ?").bind(id),
+  ]);
+  return c.redirect(`/gestao?${new URLSearchParams({ ok: `Licença ${l.chave} apagada.` })}`);
 });
 
 // N.º de alojamentos de uma licença de cortesia (as pagas mudam-se no Stripe).

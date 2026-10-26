@@ -318,11 +318,15 @@ export function paginaLicencas(
                 : ""}
               <form method="post" action="/gestao/licencas/${l.id}/${l.revogada ? "reativar" : "revogar"}">
                 <button class="${l.revogada ? "" : "perigo"} pequeno">${l.revogada ? "Reativar" : "Revogar"}</button></form>
-              ${l.ultima_comunicacao
-                ? ""
-                : html`<form method="post" action="/gestao/licencas/${l.id}/apagar" onsubmit="return confirm('Apagar esta licença?')">
-                    <button class="perigo pequeno">Apagar</button></form>`}`
-            : ""}</td>
+`
+            : ""}
+            ${l.ultima_comunicacao || l.url_instalacao
+              ? ""
+              : html`<form method="post" action="/gestao/licencas/${l.id}/apagar"
+                  onsubmit="return confirm(this.dataset.pergunta)" data-pergunta="${l.stripe_subscription_id
+                    ? "Apagar esta licença? A assinatura no Stripe é cancelada (as faturas ficam)."
+                    : "Apagar esta licença?"}">
+                  <button class="perigo pequeno">Apagar</button></form>`}</td>
         </tr>`;
       })}
     </table></div>

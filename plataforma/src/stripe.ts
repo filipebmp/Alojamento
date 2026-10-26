@@ -21,7 +21,7 @@ export function codificar(params: Parametros, prefixo = ""): string[] {
 
 export class ErroStripe extends Error {}
 
-export async function stripe<T>(chave: string, metodo: "GET" | "POST", caminho: string, params: Parametros = {}): Promise<T> {
+export async function stripe<T>(chave: string, metodo: "GET" | "POST" | "DELETE", caminho: string, params: Parametros = {}): Promise<T> {
   const corpo = codificar(params).join("&");
   const url = metodo === "GET" && corpo ? `${API}${caminho}?${corpo}` : `${API}${caminho}`;
   const res = await fetch(url, {
