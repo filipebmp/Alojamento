@@ -2,6 +2,7 @@ import { html, raw } from "hono/html";
 import type { HtmlEscapedString } from "hono/utils/html";
 import { estadoLicenca, type Cliente, type Licenca } from "./licencas";
 import type { Fatura } from "./faturas";
+import { compararVersoes } from "../../comum/versoes";
 
 type Conteudo = HtmlEscapedString | Promise<HtmlEscapedString>;
 
@@ -285,6 +286,7 @@ export function paginaLicencas(
   config: EstadoConfig[],
   novaChave?: string,
   mensagem?: { ok: boolean; texto: string },
+  ultimaVersao?: string | null,
 ) {
   return pagina("Licenças", html`<h1>Licenças</h1>
     ${novaChave ? html`<p>✅ Licença de cortesia criada:</p><p class="chave">${novaChave}</p>` : ""}
@@ -298,6 +300,11 @@ export function paginaLicencas(
       ${linhas.map(({ licenca: l, cliente: c }) => {
         const estado = estadoLicenca(l);
         const excede = l.alojamentos_ativos != null && l.alojamentos_ativos > l.alojamentos_pagos;
+        // A versão comunicada pela instalação chega com atraso; nas alojadas, a instalada pela plataforma é mais recente.
+        const versao = [l.versao, l.modo === "alojado" ? l.versao_publicada : null]
+          .filter((v): v is string => !!v).sort(compararVersoes).at(-1) ?? null;
+        const desatualizada = l.modo === "alojado" && !!l.slug && !!l.cf_base && !!ultimaVersao
+          && (!!l.erro_atualizacao || !versao || compararVersoes(ultimaVersao, versao) > 0);
         return html`<tr>
           <td><code>${l.chave}</code>${l.url_instalacao ? html`<br><small><a href="${l.url_instalacao}" target="_blank" rel="noopener">instalação</a></small>` : ""}</td>
           <td>${c?.nome ?? ""}${c?.email ? html`<br><small>${c.email}</small>` : ""}${l.notas ? html`<br><small>${l.notas}</small>` : ""}</td>
@@ -310,7 +317,7 @@ export function paginaLicencas(
                 <button class="pequeno">Alterar</button></form>`
             : l.alojamentos_pagos}</td>
           <td class="${excede ? "erro" : ""}">${l.alojamentos_ativos ?? "—"}</td>
-          <td>${l.versao ?? "—"}${l.modo === "alojado" && l.slug && l.cf_base
+          <td>${versao ?? "—"}${desatualizada
             ? html`<form method="post" action="/gestao/licencas/${l.id}/atualizar"><button class="pequeno">Atualizar agora</button></form>`
             : ""}</td>
           <td>${dataPt(l.ultima_comunicacao)}</td>

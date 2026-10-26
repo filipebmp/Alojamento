@@ -766,7 +766,7 @@ async function mostrarLicencas(c: Ctx, novaChave?: string, mensagem?: { ok: bool
     { nome: "Email (Resend)", ok: !!configEmail(env), detalhe: configEmail(env)?.remetente ?? "segredo RESEND_API_KEY em falta" },
     { nome: "InvoiceXpress", ok: !!configInvoiceXpress(env), detalhe: configInvoiceXpress(env) ? env.INVOICEXPRESS_CONTA! : "não configurado (faturas à mão)" },
   ];
-  return c.html(paginaLicencas(licencas.results.map((l) => ({ licenca: l, cliente: l.cliente_id ? porId.get(l.cliente_id) ?? null : null })), estado, novaChave, mensagem));
+  return c.html(paginaLicencas(licencas.results.map((l) => ({ licenca: l, cliente: l.cliente_id ? porId.get(l.cliente_id) ?? null : null })), estado, novaChave, mensagem, await versaoMaisRecente(c.env.DB)));
 }
 
 app.get("/gestao", async (c) => {
