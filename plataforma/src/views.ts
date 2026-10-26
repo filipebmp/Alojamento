@@ -44,7 +44,7 @@ export function pagina(
   ${opcoes.descricao ? html`<meta name="description" content="${opcoes.descricao}">` : ""}
   ${opcoes.gestao ? html`<meta name="robots" content="noindex">` : ""}
   <link rel="icon" href="/icon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="/site.css?v=3">
+  <link rel="stylesheet" href="/site.css?v=4">
 </head>
 <body>
   <header class="topo"><div class="topo-dentro">
@@ -295,7 +295,7 @@ export function paginaLicencas(
       <summary>Configuração ${config.every((x) => x.ok) ? "✅" : "⚠️"}</summary>
       <dl class="config">${config.map((x) => html`<dt>${x.ok ? "✅" : "⚠️"} ${x.nome}</dt><dd class="${x.ok ? "" : "erro"}">${x.detalhe}</dd>`)}</dl>
     </details>
-    <div class="tabela"><table>
+    <div class="tabela"><table class="cartoes">
       <tr><th>Chave</th><th>Cliente</th><th>Tipo</th><th>Estado</th><th>Pagos</th><th>Ativos</th><th>Versão</th><th>Última comunicação</th><th></th></tr>
       ${linhas.map(({ licenca: l, cliente: c }) => {
         const estado = estadoLicenca(l);
@@ -306,21 +306,21 @@ export function paginaLicencas(
         const desatualizada = l.modo === "alojado" && !!l.slug && !!l.cf_base && !!ultimaVersao
           && (!!l.erro_atualizacao || !versao || compararVersoes(ultimaVersao, versao) > 0);
         return html`<tr>
-          <td><code>${l.chave}</code>${l.url_instalacao ? html`<br><small><a href="${l.url_instalacao}" target="_blank" rel="noopener">instalação</a></small>` : ""}</td>
-          <td>${c?.nome ?? ""}${c?.email ? html`<br><small>${c.email}</small>` : ""}${l.notas ? html`<br><small>${l.notas}</small>` : ""}</td>
-          <td>${l.tipo}${l.modo ? html`<br><small>${l.modo}</small>` : ""}${l.valida_ate ? html`<br><small>até ${dataPt(l.valida_ate)}</small>` : ""}
+          <td data-r="Chave"><code>${l.chave}</code>${l.url_instalacao ? html`<br><small><a href="${l.url_instalacao}" target="_blank" rel="noopener">instalação</a></small>` : ""}</td>
+          <td data-r="Cliente">${c?.nome ?? ""}${c?.email ? html`<br><small>${c.email}</small>` : ""}${l.notas ? html`<br><small>${l.notas}</small>` : ""}</td>
+          <td data-r="Tipo">${l.tipo}${l.modo ? html`<br><small>${l.modo}</small>` : ""}${l.valida_ate ? html`<br><small>até ${dataPt(l.valida_ate)}</small>` : ""}
             ${l.erro_atualizacao ? html`<br><small class="erro">atualização: ${l.erro_atualizacao}</small>` : ""}</td>
-          <td class="${estado === "ativa" ? "" : "erro"}">${NOMES_ESTADO[estado]}</td>
-          <td>${l.tipo === "cortesia"
+          <td data-r="Estado" class="${estado === "ativa" ? "" : "erro"}">${NOMES_ESTADO[estado]}</td>
+          <td data-r="Pagos">${l.tipo === "cortesia"
             ? html`<form method="post" action="/gestao/licencas/${l.id}/alojamentos" class="linha">
                 <input type="number" name="alojamentos" min="1" max="1000" value="${l.alojamentos_pagos}" style="width: 4.5em; margin: 0" aria-label="Alojamentos incluídos">
                 <button class="pequeno">Alterar</button></form>`
             : l.alojamentos_pagos}</td>
-          <td class="${excede ? "erro" : ""}">${l.alojamentos_ativos ?? "—"}</td>
-          <td>${versao ?? "—"}${desatualizada
+          <td data-r="Ativos" class="${excede ? "erro" : ""}">${l.alojamentos_ativos ?? "—"}</td>
+          <td data-r="Versão">${versao ?? "—"}${desatualizada
             ? html`<form method="post" action="/gestao/licencas/${l.id}/atualizar"><button class="pequeno">Atualizar agora</button></form>`
             : ""}</td>
-          <td>${dataPt(l.ultima_comunicacao)}</td>
+          <td data-r="Último contacto">${dataPt(l.ultima_comunicacao)}</td>
           <td>${l.tipo === "cortesia"
             ? html`${c?.email && !l.revogada
                 ? html`<form method="post" action="/gestao/licencas/${l.id}/enviar"><button class="pequeno">Enviar por email</button></form>`
@@ -361,14 +361,14 @@ export function paginaFaturas(linhas: { fatura: Fatura; cliente: Cliente | null 
     <p class="nota">${invoiceXpress
       ? "As faturas-recibo são emitidas automaticamente no InvoiceXpress quando o Stripe confirma o pagamento."
       : "InvoiceXpress não configurado: emita cada fatura-recibo no seu programa certificado e registe aqui o número."}</p>
-    <div class="tabela"><table>
+    <div class="tabela"><table class="cartoes">
       <tr><th>Pago em</th><th>Cliente</th><th>Valor</th><th>Alojamentos</th><th>Estado</th><th></th></tr>
       ${linhas.map(({ fatura: f, cliente: c }) => html`<tr>
-        <td>${dataPt(f.pago_em)}</td>
-        <td>${c?.nome ?? c?.email ?? "—"}${c?.nif ? html`<br><small>NIF ${c.nif}</small>` : ""}</td>
-        <td>${euros(f.valor_cents)}</td>
-        <td>${f.alojamentos}</td>
-        <td class="${f.estado === "emitida" ? "" : "erro"}">${NOMES_FATURA[f.estado]}${f.numero ? html`<br><small>${f.numero}</small>` : ""}
+        <td data-r="Pago em">${dataPt(f.pago_em)}</td>
+        <td data-r="Cliente">${c?.nome ?? c?.email ?? "—"}${c?.nif ? html`<br><small>NIF ${c.nif}</small>` : ""}</td>
+        <td data-r="Valor">${euros(f.valor_cents)}</td>
+        <td data-r="Alojamentos">${f.alojamentos}</td>
+        <td data-r="Estado" class="${f.estado === "emitida" ? "" : "erro"}">${NOMES_FATURA[f.estado]}${f.numero ? html`<br><small>${f.numero}</small>` : ""}
           ${f.erro ? html`<br><small>${f.erro}</small>` : ""}</td>
         <td>${f.estado === "emitida"
           ? ""

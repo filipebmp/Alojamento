@@ -174,6 +174,19 @@ table { width: 100%; border-collapse: collapse; font-size: .9rem; }
 th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--linha); vertical-align: top; }
 th { font-size: .8rem; font-weight: 600; color: var(--suave); }
 tr:last-child td { border-bottom: 0; }
+/* Tabelas da gestão: no telemóvel, cada linha passa a cartão (sem deslizar para o lado). */
+@media (max-width: 720px) {
+  table.cartoes, table.cartoes tbody, table.cartoes tr, table.cartoes td { display: block; }
+  table.cartoes tr:first-child { display: none; }
+  table.cartoes tr { padding: 10px 14px; border-bottom: 1px solid var(--linha); }
+  table.cartoes tr:last-child { border-bottom: 0; }
+  table.cartoes td { position: relative; padding: 5px 0 5px 9.5em; border: 0; overflow-wrap: anywhere; min-height: 1.6em; }
+  table.cartoes td::before { content: attr(data-r); position: absolute; left: 0; top: 7px; width: 9em; font-size: .8rem; font-weight: 600; color: var(--suave); }
+  table.cartoes td:not([data-r]) { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px 0 2px; }
+  table.cartoes td:not([data-r]):empty { display: none; }
+  table.cartoes td:not([data-r])::before { content: none; }
+  table.cartoes td form { margin: 0; }
+}
 code { font-size: .85rem; }
 .config { display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; margin: 10px 0 0; }
 .config dd { margin: 0; overflow-wrap: anywhere; }
