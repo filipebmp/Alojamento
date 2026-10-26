@@ -44,7 +44,7 @@ ENCAMINHAR_EMAILS = "filipebmp@gmail.com"
 # "sim" para mostrar o botão de compra (exige também STRIPE_PRECO e STRIPE_SECRET_KEY)
 VENDAS_ABERTAS = "sim"
 # Id do preço mensal por alojamento no Stripe (price_…), com IVA incluído
-STRIPE_PRECO = "price_1UUSLTJxtnFlNZypym7MyHVX"
+STRIPE_PRECO = "price_1UUkF9JxtnFlNZypmsyxEBct"
 # Link de acesso ao portal do cliente do Stripe (Settings → Billing → Customer portal), para alterar ou cancelar
 STRIPE_PORTAL = "https://billing.stripe.com/p/login/test_cNieVe9NZglngtmbgI3gk00"
 # Subdomínio da conta InvoiceXpress (<conta>.app.invoicexpress.com) e nome do imposto a aplicar
