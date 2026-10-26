@@ -9,6 +9,7 @@ import { calcularTmt, cobraTmt, descreverTmt, temEpocas } from "../lib/tmt";
 import type { Alojamento, DeclaracaoTmt, Passo } from "../lib/tipos";
 import { type Calendario, NOMES_PLATAFORMA } from "../lib/importacao";
 import { NOMES_PLATAFORMAS, PLATAFORMAS } from "../lib/ical";
+import type { Responsavel } from "../lib/privacidade";
 import type { EmailRecebido } from "../lib/emails";
 import type { DadosEmailReserva } from "../../../comum/emails";
 import { N_CODIGOS, type Papel, type Utilizador } from "../lib/utilizadores";
@@ -653,7 +654,9 @@ export function paginaDefinicoes(opcoes: {
   erro?: string;
   licenca: { chave: string | null; estado: EstadoGuardado | null; erro: string | null; aviso: string | null; linkAssinar: string | null };
   versao: { atual: string; automatica: boolean; ultima: { em: string; versao: string; erro?: string } | null };
+  responsavel: Responsavel | null;
 }) {
+  const resp = opcoes.responsavel;
   const v = opcoes.versao;
   const { chave, estado, erro, aviso } = opcoes.licenca;
   return pagina("Definições", html`<h1>Definições</h1>
@@ -676,6 +679,18 @@ export function paginaDefinicoes(opcoes: {
         <button type="submit">Guardar e verificar</button>
       </form>
       <p class="nota">A sua instalação só envia ao bookgest a chave, a versão e o número de alojamentos ativos.</p>
+    </section>
+    <section class="cartao" id="privacidade">
+      <h2>Privacidade dos hóspedes (RGPD)</h2>
+      <p class="nota">Perante os hóspedes, o responsável pelos dados é o gestor. Estes dados aparecem no check-in e na
+        <a href="/privacidade" target="_blank">página de privacidade</a> que os hóspedes podem consultar.</p>
+      ${resp ? "" : html`<p class="erro">Por preencher: o check-in ainda não identifica o responsável pelos dados.</p>`}
+      <form method="post" action="/admin/definicoes/privacidade">
+        <label>Nome ou empresa <input name="nome" required value="${resp?.nome ?? ""}" placeholder="Ex.: Maria Silva ou Casas do Mar, Lda."></label>
+        <label>NIF <input name="nif" inputmode="numeric" value="${resp?.nif ?? ""}"></label>
+        <label>Email para pedidos sobre os dados <input type="email" name="email" required value="${resp?.email ?? ""}"></label>
+        <button type="submit">Guardar</button>
+      </form>
     </section>
     <section class="cartao">
       <h2>Versão</h2>

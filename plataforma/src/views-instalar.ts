@@ -89,7 +89,8 @@ export function paginaRegistar(opcoes: { erro?: string; enviado?: boolean; nome?
       <label>Email <input type="email" name="email" required value="${opcoes.email ?? ""}" autocomplete="email"></label>
       ${campoEndereco(opcoes.slug ?? "", opcoes.sufixo)}
       <label class="opcao"><input type="checkbox" name="termos" value="1" required>
-        <span>Aceito os <a href="/termos" target="_blank">termos de utilização e de tratamento de dados</a></span></label>
+        <span>Aceito os <a href="/termos" target="_blank">termos de utilização</a> e o <a href="/tratamento-de-dados" target="_blank">acordo de tratamento de dados</a>,
+          e li a <a href="/privacidade" target="_blank">política de privacidade</a>.</span></label>
       <button type="submit">Criar o meu bookgest</button>
     </form>
     <p class="nota">Prefere que os dados fiquem numa conta Cloudflare sua? Depois de subscrever pode usar o
@@ -142,22 +143,6 @@ export function paginaAssinar(
           <button type="submit">Subscrever</button>
         </form>
         <p class="nota">A sua instalação e os seus dados mantêm-se: só muda a licença.</p>`}`, { estreito: true });
-}
-
-export function paginaTermos(contacto: string | null) {
-  return pagina("Termos", html`<h1>Termos de utilização e tratamento de dados</h1>
-    <p class="aviso">Versão provisória, em revisão jurídica.</p>
-    <h2>Quem somos</h2>
-    <p>O bookgest é um serviço de gestão de Alojamento Local${contacto ? html` (contacto: <a href="mailto:${contacto}">${contacto}</a>)` : ""}.</p>
-    <h2>Os dados dos seus hóspedes</h2>
-    <p>O gestor é o responsável pelo tratamento dos dados dos seus hóspedes. No modo alojado, o bookgest trata-os
-      apenas por conta do gestor, como subcontratante (art. 28.º do RGPD): numa base de dados separada para cada
-      cliente, sem os consultar, ceder ou usar para outros fins, e apaga-os quando o gestor deixar o serviço e o pedir.
-      No modo privado (conta Cloudflare do gestor), o bookgest não tem acesso a eles.</p>
-    <p>A infraestrutura é da Cloudflare (subcontratante ulterior), com dados guardados na União Europeia ou ao abrigo
-      das cláusulas contratuais-tipo.</p>
-    <h2>Os seus dados de cliente</h2>
-    <p>Nome, email, dados de faturação e número de alojamentos, para gerir a licença, faturar e dar apoio.</p>`, { estreito: true });
 }
 
 export function paginaEntrar(opcoes: { enviado?: boolean; erro?: string; erroEndereco?: string; endereco?: string; dominio?: string } = {}) {
@@ -225,7 +210,10 @@ export function paginaPagamento(o: {
       <div id="checkout-form"><p class="nota">A carregar o pagamento seguro…</p></div>
       <p class="erro" id="erro-pagamento" hidden></p>
     </div>
-    <p class="nota">Pagamento seguro pelo Stripe: os dados do cartão nunca passam pelo bookgest.</p>
+    <p class="nota">Ao subscrever, aceita os <a href="/termos" target="_blank">termos de utilização</a> e o
+      <a href="/tratamento-de-dados" target="_blank">acordo de tratamento de dados</a>
+      (ver também a <a href="/privacidade" target="_blank">política de privacidade</a>).
+      Pagamento seguro pelo Stripe: os dados do cartão nunca passam pelo bookgest.</p>
     <script type="module">${raw(`
 const erro = document.getElementById("erro-pagamento");
 const mostrarErro = (texto) => { erro.textContent = texto; erro.hidden = false; };

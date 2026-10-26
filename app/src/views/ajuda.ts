@@ -25,6 +25,7 @@ const SECCOES: Seccao[] = [
         <li>Em <a href="/admin/alojamentos">Alojamentos</a>, confirme os dados do alojamento: concelho (a taxa turística preenche-se sozinha), código do cofre, hora de check-in e regime de IVA.</li>
         <li>Em <strong>Instruções de chegada</strong> (dentro do alojamento), acrescente os passos com fotos para o hóspede chegar e abrir o cofre.</li>
         <li>Ligue os calendários do Booking, do Airbnb, do Vrbo ou de outra plataforma (secção <strong>Importar reservas</strong> do alojamento) e, se quiser, os <a href="/admin/emails">emails de reserva</a>.</li>
+        <li>Em <a href="/admin/definicoes#privacidade">Definições → Privacidade dos hóspedes</a>, indique o seu nome (ou da empresa), NIF e email: aparecem no check-in, como exige o RGPD.</li>
         <li>Em cada reserva, envie o link de check-in ao hóspede. O resto o bookgest vai lembrando no ecrã <strong>Hoje</strong>.</li></ol>`],
       ["Como ponho o bookgest no ecrã principal do telemóvel?", html`<p>Abra o painel no navegador e escolha <strong>Partilhar → Adicionar ao ecrã principal</strong> (iPhone, Safari)
         ou <strong>⋮ → Instalar aplicação / Adicionar ao ecrã principal</strong> (Android, Chrome). Passa a abrir como uma app, sem barra do navegador.</p>`],

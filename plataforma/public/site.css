@@ -224,3 +224,11 @@ code { font-size: .85rem; }
 .diapositivos { display: flex; gap: 12px; overflow-x: auto; scroll-snap-type: x mandatory; padding-bottom: 6px; }
 .diapositivos figure { margin: 0; flex: 0 0 min(78%, 300px); scroll-snap-align: start; display: grid; gap: 6px; justify-items: start; }
 .diapositivos img { width: 100%; aspect-ratio: 1; border-radius: 12px; border: 1px solid var(--borda); }
+
+/* ---------- Páginas legais ---------- */
+.legal-nav { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.legal-nav a { font-size: .85rem; padding: 4px 10px; border-radius: 999px; background: var(--neutro-suave); color: var(--neutro); text-decoration: none; }
+.legal-nav a[aria-current] { background: var(--marca); color: #fff; }
+mark { background: var(--hoje-suave); color: var(--hoje); padding: 0 4px; border-radius: 4px; font-weight: 600; }
+.tabela-legal { overflow-x: auto; background: var(--cartao); border: 1px solid var(--borda); border-radius: var(--raio); margin: 12px 0; }
+.tabela-legal table { font-size: .85rem; min-width: 560px; }

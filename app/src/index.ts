@@ -78,6 +78,8 @@ import {
   paginaUtilizadores,
 } from "./views/admin";
 import { paginaHospede } from "./views/hospede";
+import { paginaPrivacidadeHospedes } from "./views/privacidade";
+import { gravarResponsavel, lerResponsavel } from "./lib/privacidade";
 import { type VistaReservas, paginaCalendario, paginaHoje, paginaMais, paginaReservas } from "./views/painel";
 import { barrasCalendario, numerosHoje } from "./lib/painel";
 import { faturaPortal, nomePais, regimeIvaValido } from "./lib/faturacao";
@@ -1123,12 +1125,23 @@ async function mostrarDefinicoes(c: Ctx, opcoes: { erro?: string; guardado?: boo
         linkAssinar: licenca.chave ? `${c.env.URL_LICENCAS || URL_LICENCAS_PREDEFINIDO}/assinar?chave=${encodeURIComponent(licenca.chave)}` : null,
       },
       versao: { atual: VERSAO, automatica: !!c.env.CF_API_TOKEN, ultima: licenca.atualizacao },
+      responsavel: await lerResponsavel(c.env.DB),
     }),
     opcoes.erro ? 400 : 200,
   );
 }
 
 app.get("/admin/definicoes", (c) => mostrarDefinicoes(c));
+
+app.post("/admin/definicoes/privacidade", async (c) => {
+  const b = await c.req.parseBody<Record<string, string>>();
+  const r = { nome: (b.nome ?? "").trim().slice(0, 200), nif: (b.nif ?? "").replace(/\s/g, "").slice(0, 20), email: (b.email ?? "").trim().slice(0, 200) };
+  if (!r.nome || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(r.email)) {
+    return mostrarDefinicoes(c, { erro: "Indique o nome do responsável e um email válido para os hóspedes contactarem." });
+  }
+  await gravarResponsavel(c.env.DB, r);
+  return c.redirect("/admin/definicoes#privacidade");
+});
 
 // Verifica a licença e, havendo versão nova, atualiza já (em vez de esperar pelo dia seguinte).
 app.post("/admin/definicoes/atualizar", async (c) => {
@@ -1384,8 +1397,11 @@ async function renderHospede(c: Ctx, token: string, erro?: string) {
   const cfg = configAlojamento(alojamento);
   const estado = estadoCodigo(rc.reserva, rc.hospedes, rc.faturacao, cfg, new Date());
   const passos = estado === "disponivel" ? await listarPassos(c.env.DB, alojamento.id) : [];
-  return c.html(paginaHospede(rc, alojamento, estado, passos, cfg, erro), erro ? 400 : 200);
+  return c.html(paginaHospede(rc, alojamento, estado, passos, cfg, await lerResponsavel(c.env.DB), erro), erro ? 400 : 200);
 }
+
+// Informação aos hóspedes sobre os seus dados (ligada a partir do check-in).
+app.get("/privacidade", async (c) => c.html(paginaPrivacidadeHospedes(await lerResponsavel(c.env.DB))));
 
 app.get("/c/:token", async (c) => {
   c.header("Cache-Control", "no-store");

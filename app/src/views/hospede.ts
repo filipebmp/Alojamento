@@ -4,6 +4,8 @@ import { type EstadoCodigo, hospedeCompleto, inicioCodigo, titularCompleto } fro
 import type { Alojamento, Config, Hospede, Passo } from "../lib/tipos";
 import { dataPt, pagina } from "./layout";
 import { type Pais, listaPaises } from "../lib/paises";
+import type { Responsavel } from "../lib/privacidade";
+import { avisoPrivacidade } from "./privacidade";
 
 // Página do hóspede: bilingue (PT/EN), porque a maioria dos hóspedes é estrangeira.
 
@@ -44,11 +46,6 @@ function camposHospede(prefixo: string, h: Partial<Hospede> = {}, idDocObrigator
     </fieldset>`;
 }
 
-const AVISO_PRIVACIDADE = html`<p class="nota">
-  Os dados são usados apenas para cumprir obrigações legais em Portugal (faturação, comunicação de estrangeiros
-  ao SIBA e taxa municipal turística) e apagados após o prazo legal.<br>
-  <em>Your data is only used to meet Portuguese legal obligations (invoicing, mandatory foreign guest
-  registration with SIBA and municipal tourist tax) and deleted after the legal retention period.</em></p>`;
 
 export function paginaHospede(
   rc: ReservaCompleta,
@@ -56,6 +53,7 @@ export function paginaHospede(
   estado: EstadoCodigo,
   passos: Passo[],
   cfg: Config,
+  responsavel: Responsavel | null,
   erro?: string,
 ) {
   const { reserva: r, hospedes, faturacao } = rc;
@@ -97,7 +95,7 @@ export function paginaHospede(
               <label>Data de nascimento / Date of birth <input type="date" name="o_data_nascimento_${i}" required></label>
             </fieldset>`)}`
           : ""}
-        ${AVISO_PRIVACIDADE}
+        ${avisoPrivacidade(responsavel)}
         <button type="submit">Enviar / Submit</button>
       </form>`);
   }
@@ -127,6 +125,6 @@ export function paginaHospede(
         <em>Please complete within ${cfg.horasPrazoHospedes}h of check-in.</em></p>
         ${emFalta.map((h) => html`<form method="post" action="/c/${r.token}/hospede/${h.id}" class="cartao">
           <h3>${h.nome}</h3>${camposHospede("", h, true)}<button type="submit">Guardar / Save</button></form>`)}
-        ${AVISO_PRIVACIDADE}`
+        ${avisoPrivacidade(responsavel)}`
       : html`<p>✅ Todos os dados estão completos. Boa estadia! / All details complete. Enjoy your stay!</p>`}`);
 }

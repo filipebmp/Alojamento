@@ -61,11 +61,11 @@ import {
   paginaInstalar,
   paginaInstalarCloudflare,
   paginaRegistar,
-  paginaTermos,
   paginaPagamento,
 } from "./views-instalar";
 import { paginaEntrar, paginaFaturas, paginaInicio, paginaLicencas, paginaMensagem, paginaObrigado } from "./views";
 import { paginaInstagram, paginaNoticias } from "./views-gestao";
+import { DIAS_RETENCAO_EMAILS, paginaPrivacidade, paginaSubcontratantes, paginaTermos, paginaTratamentoDados } from "./legal";
 import { type NoticiaGuardada, atualizarNoticias } from "./noticias";
 
 // Dias de notícias mostrados na gestão.
@@ -416,6 +416,9 @@ async function enviarInstalacaoPronta(env: Env, l: Licenca, r: ResultadoInstalac
 }
 
 app.get("/termos", (c) => c.html(paginaTermos(c.env.CONTACTO || null)));
+app.get("/privacidade", (c) => c.html(paginaPrivacidade(c.env.CONTACTO || null)));
+app.get("/tratamento-de-dados", (c) => c.html(paginaTratamentoDados(c.env.CONTACTO || null)));
+app.get("/subcontratantes", (c) => c.html(paginaSubcontratantes(c.env.CONTACTO || null)));
 
 // Entrar: cada cliente tem o seu endereço. Envia-o por email (a página não revela se o email é cliente).
 // O browser lembra-se do último endereço usado (cookie só deste site), para a próxima entrada ser um clique.
@@ -970,7 +973,6 @@ app.post("/gestao/faturas/:id/manual", async (c) => {
 
 const TAMANHO_MAXIMO_EMAIL = 2_000_000;
 const EMAILS_POR_DIA = 200;
-const DIAS_RETENCAO_EMAILS = 7;
 
 // Endereço de cada licença (código aleatório: ninguém consegue adivinhar e enviar reservas falsas).
 async function enderecoEmailReservas(env: Env, l: Licenca): Promise<string | null> {
