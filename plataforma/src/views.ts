@@ -31,7 +31,8 @@ export function icone(nome: keyof typeof ICONES, tamanho = 22) {
 export function pagina(
   titulo: string,
   corpo: Conteudo,
-  opcoes: { gestao?: boolean; descricao?: string; portal?: string | null; estreito?: boolean; experimentar?: boolean; contacto?: string | null; naEntrada?: boolean } = {},
+  opcoes: { gestao?: boolean; descricao?: string; portal?: string | null; estreito?: boolean; experimentar?: boolean; contacto?: string | null; naEntrada?: boolean;
+    stripeJs?: boolean } = {},
 ) {
   return html`<!doctype html>
 <html lang="pt">
@@ -44,7 +45,8 @@ export function pagina(
   ${opcoes.descricao ? html`<meta name="description" content="${opcoes.descricao}">` : ""}
   ${opcoes.gestao ? html`<meta name="robots" content="noindex">` : ""}
   <link rel="icon" href="/icon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="/site.css?v=6">
+  <link rel="stylesheet" href="/site.css?v=7">
+  ${opcoes.stripeJs ? html`<script src="https://js.stripe.com/dahlia/stripe.js"></script>` : ""}
 </head>
 <body>
   <header class="topo"><div class="topo-dentro">

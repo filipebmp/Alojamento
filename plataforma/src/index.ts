@@ -52,7 +52,7 @@ import {
   obterLicencaPorChave,
   registarComunicacao,
 } from "./licencas";
-import { type CheckoutSession, ErroStripe, type Evento, type Invoice, type Price, type Subscription, assinaturaValida, stripe } from "./stripe";
+import { type CheckoutSession, ErroStripe, VERSAO_CHECKOUT, type Evento, type Invoice, type Price, type Subscription, assinaturaValida, stripe } from "./stripe";
 import {
   paginaAssinar,
   paginaCriar,
@@ -62,6 +62,7 @@ import {
   paginaInstalarCloudflare,
   paginaRegistar,
   paginaTermos,
+  paginaPagamento,
 } from "./views-instalar";
 import { paginaEntrar, paginaFaturas, paginaInicio, paginaLicencas, paginaMensagem, paginaObrigado } from "./views";
 import { paginaInstagram, paginaNoticias } from "./views-gestao";
@@ -78,6 +79,7 @@ type Env = {
   STRIPE_PRECO?: string; // id do preço mensal por alojamento (price_…)
   STRIPE_PORTAL?: string; // link de acesso ao portal do cliente (alterar, cancelar)
   STRIPE_SECRET_KEY?: string;
+  STRIPE_PUBLISHABLE_KEY?: string; // chave publicável (pk_…) do formulário de pagamento embutido; não é segredo
   STRIPE_WEBHOOK_SECRET?: string;
   ADMIN_PASSWORD?: string; // acesso à página de gestão
   INVOICEXPRESS_CONTA?: string;
@@ -136,7 +138,11 @@ async function precoMensal(env: Env): Promise<number | null> {
   }
 }
 
-const vendasAbertas = (env: Env) => env.VENDAS_ABERTAS === "sim" && !!env.STRIPE_SECRET_KEY && !!env.STRIPE_PRECO;
+const vendasAbertas = (env: Env) => env.VENDAS_ABERTAS === "sim" && !!env.STRIPE_SECRET_KEY && !!env.STRIPE_PRECO && !!env.STRIPE_PUBLISHABLE_KEY;
+
+// O formulário de pagamento é embutido no site: o envio normal do formulário mostra a página de pagamento,
+// que volta a pedir o mesmo endereço em JSON para obter o client_secret da sessão de Checkout.
+const pedeJson = (c: Ctx) => (c.req.header("Accept") ?? "").includes("application/json");
 const urlBase = (c: Ctx) => c.env.URL_PUBLICO || new URL(c.req.url).origin;
 
 app.get("/", async (c) =>
@@ -149,18 +155,24 @@ app.post("/comprar", async (c) => {
   const { alojamentos } = await c.req.parseBody<{ alojamentos: string }>();
   const n = Number(alojamentos);
   if (!Number.isInteger(n) || n < 1 || n > 50) return c.html(paginaMensagem("Número inválido", "Indique entre 1 e 50 alojamentos."), 400);
+  if (!pedeJson(c)) {
+    return c.html(paginaPagamento({ acao: "/comprar", campos: { alojamentos: String(n) }, alojamentos: n, precoCents: await precoMensal(c.env),
+      chavePublica: c.env.STRIPE_PUBLISHABLE_KEY!, voltar: "/#precos" }));
+  }
   const base = urlBase(c);
-  const sessao = await stripe<{ url: string }>(c.env.STRIPE_SECRET_KEY!, "POST", "/checkout/sessions", {
+  const sessao = await stripe<{ client_secret: string }>(c.env.STRIPE_SECRET_KEY!, "POST", "/checkout/sessions", {
+    ui_mode: "form",
     mode: "subscription",
     line_items: [{ price: c.env.STRIPE_PRECO, quantity: n, adjustable_quantity: { enabled: true, minimum: 1, maximum: 50 } }],
-    success_url: `${base}/obrigado?sessao={CHECKOUT_SESSION_ID}`,
-    cancel_url: `${base}/#precos`,
-    locale: "pt",
-    billing_address_collection: "required",
-    tax_id_collection: { enabled: true },
-    allow_promotion_codes: true,
-  });
-  return c.redirect(sessao.url, 303);
+    return_url: `${base}/obrigado?sessao={CHECKOUT_SESSION_ID}`,
+    billing_address_collection: "auto",
+    phone_number_collection: { enabled: false },
+    automatic_tax: { enabled: false },
+    payment_method_collection: "always",
+    submit_type: "auto",
+    integration_identifier: "custom_embedded_web_0001",
+  }, VERSAO_CHECKOUT);
+  return c.json({ client_secret: sessao.client_secret });
 });
 
 app.get("/obrigado", async (c) => {
@@ -572,21 +584,26 @@ app.post("/assinar", async (c) => {
   if (!l || !vendasAbertas(c.env)) return c.html(paginaMensagem("Não é possível subscrever", "Contacte-nos."), 400);
   const n = Number(b.alojamentos);
   if (!Number.isInteger(n) || n < 1 || n > 50) return c.html(paginaAssinar(l.chave, { precoCents: await precoMensal(c.env), alojamentos: 1, erro: "Indique entre 1 e 50 alojamentos." }), 400);
-  const email = l.cliente_id ? await c.env.DB.prepare("SELECT email FROM clientes WHERE id = ?").bind(l.cliente_id).first<string>("email") : null;
+  if (!pedeJson(c)) {
+    return c.html(paginaPagamento({ acao: "/assinar", campos: { chave: l.chave, alojamentos: String(n) }, alojamentos: n, precoCents: await precoMensal(c.env),
+      chavePublica: c.env.STRIPE_PUBLISHABLE_KEY!, voltar: `/assinar?chave=${encodeURIComponent(l.chave)}` }));
+  }
   const base = urlBase(c);
-  const sessao = await stripe<{ url: string }>(c.env.STRIPE_SECRET_KEY!, "POST", "/checkout/sessions", {
+  const sessao = await stripe<{ client_secret: string }>(c.env.STRIPE_SECRET_KEY!, "POST", "/checkout/sessions", {
+    ui_mode: "form",
     mode: "subscription",
+    // Liga o pagamento à licença existente (fim do período experimental): ver garantirLicencaCheckout.
     client_reference_id: String(l.id),
-    customer_email: email ?? undefined,
     line_items: [{ price: c.env.STRIPE_PRECO, quantity: n, adjustable_quantity: { enabled: true, minimum: 1, maximum: 50 } }],
-    success_url: `${base}/obrigado?sessao={CHECKOUT_SESSION_ID}`,
-    cancel_url: `${base}/assinar?chave=${encodeURIComponent(l.chave)}`,
-    locale: "pt",
-    billing_address_collection: "required",
-    tax_id_collection: { enabled: true },
-    allow_promotion_codes: true,
-  });
-  return c.redirect(sessao.url, 303);
+    return_url: `${base}/obrigado?sessao={CHECKOUT_SESSION_ID}`,
+    billing_address_collection: "auto",
+    phone_number_collection: { enabled: false },
+    automatic_tax: { enabled: false },
+    payment_method_collection: "always",
+    submit_type: "auto",
+    integration_identifier: "custom_embedded_web_0001",
+  }, VERSAO_CHECKOUT);
+  return c.json({ client_secret: sessao.client_secret });
 });
 
 // Atualiza as instalações alojadas para a versão mais recente (algumas por execução, por causa do limite de
@@ -767,6 +784,16 @@ async function mostrarLicencas(c: Ctx, novaChave?: string, mensagem?: { ok: bool
         : env.STRIPE_SECRET_KEY.startsWith("pk_")
           ? "é a chave publicável (pk_…): use a chave secreta (sk_…)"
           : env.STRIPE_SECRET_KEY.startsWith("sk_test_") ? "modo de teste" : env.STRIPE_SECRET_KEY.slice(0, 8) + "…",
+    },
+    {
+      nome: "Chave publicável do Stripe",
+      // Tem de ser do mesmo modo (teste ou real) que a chave secreta.
+      ok: /^pk_/.test(env.STRIPE_PUBLISHABLE_KEY ?? "") && env.STRIPE_PUBLISHABLE_KEY!.startsWith("pk_test_") === (env.STRIPE_SECRET_KEY ?? "").includes("_test_"),
+      detalhe: !env.STRIPE_PUBLISHABLE_KEY
+        ? "STRIPE_PUBLISHABLE_KEY em falta (sem ela não há pagamento no site)"
+        : env.STRIPE_PUBLISHABLE_KEY.startsWith("pk_test_") !== (env.STRIPE_SECRET_KEY ?? "").includes("_test_")
+          ? "modo diferente da chave secreta (uma de teste, outra real)"
+          : env.STRIPE_PUBLISHABLE_KEY.startsWith("pk_test_") ? "modo de teste" : "modo real",
     },
     { nome: "Preço", ok: preco != null, detalhe: preco != null ? `${(preco / 100).toFixed(2).replace(".", ",")} € por alojamento` : erroPreco ?? (env.STRIPE_PRECO ? "sem resposta" : "STRIPE_PRECO em falta") },
     { nome: "Segredo do webhook", ok: !!env.STRIPE_WEBHOOK_SECRET, detalhe: env.STRIPE_WEBHOOK_SECRET ? "definido" : "segredo STRIPE_WEBHOOK_SECRET em falta" },

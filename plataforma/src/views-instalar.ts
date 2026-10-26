@@ -1,4 +1,4 @@
-import { html } from "hono/html";
+import { html, raw } from "hono/html";
 import type { ResultadoInstalacao } from "./instalador";
 import { pagina } from "./views";
 
@@ -183,4 +183,84 @@ export function paginaEntrar(opcoes: { enviado?: boolean; erro?: string; erroEnd
         <button type="submit">Enviar o link</button>
       </form>
     </details>`, { estreito: true, naEntrada: true });
+}
+
+// ---------- Pagamento (formulário do Stripe embutido no site) ----------
+
+// Aspeto do formulário configurado no Checkout Studio do Stripe.
+const APARENCIA_STRIPE = {
+  theme: "stripe",
+  labels: "auto",
+  inputs: "spaced",
+  variables: {
+    borderRadius: "4px",
+    colorBackground: "#ffffff",
+    colorDanger: "#df1b41",
+    colorPrimary: "#0570de",
+    colorSuccess: "#00c853",
+    colorText: "#30313d",
+    fontFamily: "default",
+    fontSizeBase: "16px",
+    spacingUnit: "4px",
+  },
+};
+
+// JSON seguro dentro de <script> (sem "</script>").
+const jsonScript = (v: unknown) => JSON.stringify(v).replace(/</g, "\\u003c");
+
+export function paginaPagamento(o: {
+  acao: "/comprar" | "/assinar";
+  campos: Record<string, string>;
+  alojamentos: number;
+  precoCents: number | null;
+  chavePublica: string;
+  voltar: string;
+}) {
+  const total = o.precoCents != null ? ((o.precoCents * o.alojamentos) / 100).toLocaleString("pt-PT", { style: "currency", currency: "EUR" }) : null;
+  return pagina("Pagamento", html`<p><a href="${o.voltar}">← Voltar</a></p>
+    <h1>Subscrever o bookgest</h1>
+    <p>${o.alojamentos} ${o.alojamentos === 1 ? "alojamento" : "alojamentos"}${total ? html` · <strong>${total} por mês</strong>, IVA incluído` : ""}.
+      Pode alterar o número de alojamentos ou cancelar a qualquer momento.</p>
+    <div class="cartao">
+      <div id="checkout-form"><p class="nota">A carregar o pagamento seguro…</p></div>
+      <p class="erro" id="erro-pagamento" hidden></p>
+    </div>
+    <p class="nota">Pagamento seguro pelo Stripe: os dados do cartão nunca passam pelo bookgest.</p>
+    <script type="module">${raw(`
+const erro = document.getElementById("erro-pagamento");
+const mostrarErro = (texto) => { erro.textContent = texto; erro.hidden = false; };
+const stripe = Stripe(${jsonScript(o.chavePublica)}, { locale: "pt" });
+const appearance = ${jsonScript(APARENCIA_STRIPE)};
+// O servidor devolve só o client_secret da sessão de Checkout (JSON).
+const clientSecret = fetch(${jsonScript(o.acao)}, {
+  method: "POST",
+  headers: { Accept: "application/json" },
+  body: new URLSearchParams(${jsonScript(o.campos)}),
+})
+  .then((r) => { if (!r.ok) throw new Error("sessão"); return r.json(); })
+  .then((json) => json.client_secret)
+  .catch((e) => { mostrarErro("Não foi possível iniciar o pagamento. Atualize a página ou contacte-nos."); throw e; });
+const checkout = stripe.initCheckoutFormSdk({ clientSecret, appearance });
+document.getElementById("checkout-form").replaceChildren();
+const form = checkout.createForm({ layout: "expanded" });
+form.mount("#checkout-form");
+
+const loadActionsResult = await checkout.loadActions();
+if (loadActionsResult.type === "success") {
+  form.on("confirm", async (event) => {
+    erro.hidden = true;
+    try {
+      // Se correr bem, o Stripe leva o cliente para /obrigado (return_url da sessão).
+      const resultado = await loadActionsResult.actions.confirm({ formConfirmEvent: event });
+      if (resultado?.type === "error") mostrarErro(resultado.error.message);
+    } catch (error) {
+      console.error("Payment confirmation error:", error);
+      mostrarErro("O pagamento não foi concluído. Tente de novo.");
+    }
+  });
+} else {
+  mostrarErro("Não foi possível iniciar o pagamento. Atualize a página ou contacte-nos.");
+}
+`)}</script>
+  `, { estreito: true, stripeJs: true });
 }

@@ -21,12 +21,15 @@ export function codificar(params: Parametros, prefixo = ""): string[] {
 
 export class ErroStripe extends Error {}
 
-export async function stripe<T>(chave: string, metodo: "GET" | "POST" | "DELETE", caminho: string, params: Parametros = {}): Promise<T> {
+// Versão da API exigida pelo formulário de pagamento embutido (Checkout com ui_mode "form").
+export const VERSAO_CHECKOUT = "2026-03-25.dahlia";
+
+export async function stripe<T>(chave: string, metodo: "GET" | "POST" | "DELETE", caminho: string, params: Parametros = {}, versao?: string): Promise<T> {
   const corpo = codificar(params).join("&");
   const url = metodo === "GET" && corpo ? `${API}${caminho}?${corpo}` : `${API}${caminho}`;
   const res = await fetch(url, {
     method: metodo,
-    headers: { Authorization: `Bearer ${chave}`, "Content-Type": "application/x-www-form-urlencoded" },
+    headers: { Authorization: `Bearer ${chave}`, "Content-Type": "application/x-www-form-urlencoded", ...(versao ? { "Stripe-Version": versao } : {}) },
     body: metodo === "POST" ? corpo : undefined,
   });
   const json = (await res.json()) as T & { error?: { message: string } };
