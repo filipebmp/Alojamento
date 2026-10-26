@@ -44,13 +44,13 @@ export function pagina(
   ${opcoes.descricao ? html`<meta name="description" content="${opcoes.descricao}">` : ""}
   ${opcoes.gestao ? html`<meta name="robots" content="noindex">` : ""}
   <link rel="icon" href="/icon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="/site.css?v=5">
+  <link rel="stylesheet" href="/site.css?v=6">
 </head>
 <body>
   <header class="topo"><div class="topo-dentro">
     <a href="${opcoes.gestao ? "/gestao" : "/"}" class="marca"><span class="logo">${icone("casa", 17)}</span>bookgest${opcoes.gestao ? html` <small>· gestão</small>` : ""}</a>
     ${opcoes.gestao
-      ? opcoes.naEntrada ? "" : html`<nav><a href="/gestao">Licenças</a><a href="/gestao/faturas">Faturas</a></nav>`
+      ? opcoes.naEntrada ? "" : html`<nav class="nav-gestao"><a href="/gestao">Licenças</a><a href="/gestao/faturas">Faturas</a><a href="/gestao/noticias">Notícias</a><a href="/gestao/instagram">Instagram</a></nav>`
       : html`<nav><a class="opcional" href="/#funcionalidades">Funcionalidades</a><a class="opcional" href="/#precos">Preço</a>
           ${opcoes.portal ? html`<a class="opcional" href="${opcoes.portal}">Assinatura</a>` : ""}${opcoes.naEntrada ? "" : html`<a href="/entrar">Entrar</a>`}
           ${opcoes.experimentar ? html`<a class="botao" href="/registar">Experimentar</a>` : ""}</nav>`}

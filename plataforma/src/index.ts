@@ -64,6 +64,11 @@ import {
   paginaTermos,
 } from "./views-instalar";
 import { paginaEntrar, paginaFaturas, paginaInicio, paginaLicencas, paginaMensagem, paginaObrigado } from "./views";
+import { paginaInstagram, paginaNoticias } from "./views-gestao";
+import { type NoticiaGuardada, atualizarNoticias } from "./noticias";
+
+// Dias de notícias mostrados na gestão.
+const DIAS_NOTICIAS = 14;
 
 type Env = {
   DB: D1Database;
@@ -741,6 +746,9 @@ app.use("/gestao/licencas/*", exigirSessao);
 app.use("/gestao/licencas", exigirSessao);
 app.use("/gestao/faturas", exigirSessao);
 app.use("/gestao/faturas/*", exigirSessao);
+app.use("/gestao/noticias", exigirSessao);
+app.use("/gestao/noticias/*", exigirSessao);
+app.use("/gestao/instagram", exigirSessao);
 
 async function mostrarLicencas(c: Ctx, novaChave?: string, mensagem?: { ok: boolean; texto: string }) {
   const [licencas, clientes] = await Promise.all([
@@ -884,6 +892,25 @@ app.post("/gestao/licencas/:id/:acao{revogar|reativar}", async (c) => {
   return c.redirect("/gestao");
 });
 
+app.get("/gestao/noticias", async (c) => {
+  const agora = new Date();
+  const desde = new Date(agora.getTime() - DIAS_NOTICIAS * 86_400_000).toISOString();
+  const noticias = (await c.env.DB.prepare("SELECT * FROM noticias WHERE publicada_em >= ? ORDER BY publicada_em DESC LIMIT 300")
+    .bind(desde).all<NoticiaGuardada>()).results;
+  const atualizadaEm = await c.env.DB.prepare("SELECT valor FROM definicoes WHERE chave = 'noticias_em'").first<string>("valor");
+  const resposta = c.html(paginaNoticias({ noticias, agora, atualizadaEm, todas: c.req.query("todas") === "1", mensagem: c.req.query("ok") }));
+  // Na próxima visita deixam de aparecer como novas.
+  await c.env.DB.prepare("UPDATE noticias SET vista = 1 WHERE vista = 0").run();
+  return resposta;
+});
+
+app.post("/gestao/noticias/atualizar", async (c) => {
+  const novas = await atualizarNoticias(c.env.DB);
+  return c.redirect(`/gestao/noticias?ok=${encodeURIComponent(novas === 1 ? "1 notícia nova." : `${novas} notícias novas.`)}`);
+});
+
+app.get("/gestao/instagram", (c) => c.html(paginaInstagram()));
+
 app.get("/gestao/faturas", async (c) => {
   const [faturas, clientes] = await Promise.all([
     c.env.DB.prepare("SELECT * FROM faturas ORDER BY pago_em DESC").all<Fatura>(),
@@ -975,6 +1002,9 @@ export default {
     ctx.waitUntil((async () => {
       await env.DB.prepare("DELETE FROM emails_reservas WHERE expira_em < ?").bind(new Date().toISOString()).run();
       await atualizarAlojadas(env);
+      // Notícias de 3 em 3 horas.
+      const ultima = await env.DB.prepare("SELECT valor FROM definicoes WHERE chave = 'noticias_em'").first<string>("valor");
+      if (!ultima || Date.now() - Date.parse(ultima) > 170 * 60_000) await atualizarNoticias(env.DB).catch((e) => console.error("Notícias", e));
     })());
   },
   async email(message: ForwardableEmailMessage, env: Env) {

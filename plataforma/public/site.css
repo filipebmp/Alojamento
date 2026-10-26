@@ -194,3 +194,33 @@ tr:last-child td { border-bottom: 0; }
 code { font-size: .85rem; }
 .config { display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; margin: 10px 0 0; }
 .config dd { margin: 0; overflow-wrap: anywhere; }
+
+/* ---------- Gestão: menu, notícias e Instagram ---------- */
+@media (max-width: 640px) {
+  .topo-dentro:has(.nav-gestao) { flex-wrap: wrap; row-gap: 4px; }
+  .nav-gestao { width: 100%; overflow-x: auto; margin: 0 -10px; }
+  .nav-gestao a { white-space: nowrap; }
+}
+.botoes-linha { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.botoes-linha form { margin: 0; }
+.botoes-linha .botao.pequeno { min-height: 32px; padding: 4px 12px; font-size: .85rem; margin: 0; border-radius: 9px; }
+.resumo-noticias p { margin-top: 0; }
+.dia-noticias { font-size: 1rem; margin: 24px 0 8px; text-transform: capitalize; }
+.noticias { display: grid; gap: 10px; }
+.noticia { background: var(--cartao); border: 1px solid var(--borda); border-radius: var(--raio); padding: 12px 14px; display: grid; gap: 4px; }
+.noticia.nova { border-color: var(--marca); }
+.noticia a { color: var(--texto); text-decoration: none; }
+.noticia a:hover strong { text-decoration: underline; }
+.noticia .etiquetas { display: flex; flex-wrap: wrap; gap: 4px; }
+.noticia .etiqueta { font-size: .72rem; font-weight: 650; padding: 1px 8px; border-radius: 999px; background: var(--neutro-suave); color: var(--neutro); }
+.noticia .etiqueta.imp { background: var(--hoje-suave); color: var(--hoje); }
+.noticia .etiqueta.nova { background: var(--marca); color: #fff; }
+.noticia .no-bookgest { margin: 2px 0 0; font-size: .85rem; color: var(--marca); }
+.noticia .no-bookgest.falta { color: var(--hoje); font-weight: 600; }
+.bio, .legenda-ig { white-space: pre-line; }
+.perfil-ig { width: 96px; height: 96px; border-radius: 50%; margin: 4px 0; }
+.sobre-pub { display: flex; align-items: center; gap: 8px; margin-top: 0; color: var(--suave); font-size: .9rem; }
+.sobre-pub .etiqueta { font-weight: 700; padding: 0 9px; border-radius: 999px; background: var(--marca); color: #fff; }
+.diapositivos { display: flex; gap: 12px; overflow-x: auto; scroll-snap-type: x mandatory; padding-bottom: 6px; }
+.diapositivos figure { margin: 0; flex: 0 0 min(78%, 300px); scroll-snap-align: start; display: grid; gap: 6px; justify-items: start; }
+.diapositivos img { width: 100%; aspect-ratio: 1; border-radius: 12px; border: 1px solid var(--borda); }
