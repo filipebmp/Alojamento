@@ -89,7 +89,7 @@ export function paginaRegistar(opcoes: { erro?: string; enviado?: boolean; nome?
       <label>Email <input type="email" name="email" required value="${opcoes.email ?? ""}" autocomplete="email"></label>
       ${campoEndereco(opcoes.slug ?? "", opcoes.sufixo)}
       <label class="opcao"><input type="checkbox" name="termos" value="1" required>
-        Aceito os <a href="/termos" target="_blank">termos de utilização e de tratamento de dados</a></label>
+        <span>Aceito os <a href="/termos" target="_blank">termos de utilização e de tratamento de dados</a></span></label>
       <button type="submit">Criar o meu bookgest</button>
     </form>
     <p class="nota">Prefere que os dados fiquem numa conta Cloudflare sua? Depois de subscrever pode usar o
