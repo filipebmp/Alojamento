@@ -85,7 +85,8 @@ const FUNCIONALIDADES: [Parameters<typeof icone>[0], string, string][] = [
   ["chave", "Código das chaves no momento certo", "O código do cofre só aparece depois do formulário preenchido e perto da hora de entrada, com as suas fotos de como chegar."],
   ["calendario", "Reservas do Booking e do Airbnb", "Ligue o calendário de cada plataforma e as reservas entram sozinhas, num calendário com todos os alojamentos."],
   ["email", "Emails de reserva", "Reencaminhe os emails de confirmação e o bookgest completa o nome, os hóspedes e os valores de cada reserva."],
-  ["escudo", "SIBA e fatura-recibo", "Avisa quando tem de comunicar hóspedes estrangeiros e emitir a fatura, com os dados já reunidos e o prazo à vista."],
+  ["escudo", "Envio automático ao SIBA", "Assim que o check-in fica completo, os boletins dos hóspedes estrangeiros seguem para o webservice oficial do SIBA. Chegadas futuras seguem no dia do check-in; se algo falhar, vê o motivo e reenvia."],
+  ["recibo", "Fatura-recibo e INE", "Emite a fatura no seu programa de faturação ou prepara-a para o Portal das Finanças. Relatório mensal do INE (hóspedes e dormidas por país) pronto a transcrever."],
   ["moeda", "Taxa turística calculada", "Valor devido por estadia e resumo mensal para declarar à câmara, com as regras do seu concelho. Avisa se o Booking cobrou mal."],
   ["predios", "Vários alojamentos", "Cada alojamento com o seu código, horários, instruções e regras. Números do mês: ocupação e receita."],
   ["pessoa", "Equipa", "Dê acesso a quem faz as limpezas ou recebe os hóspedes, sem mostrar documentos, faturação ou valores."],
@@ -193,9 +194,9 @@ export function paginaInicio(d: DadosSite) {
         <p>Sim. As reservas entram sozinhas pelo calendário (iCal) de cada plataforma, e os emails de reserva reencaminhados
           completam o nome, os hóspedes e os valores. Também pode criar reservas à mão em segundos.</p></details>
       <details><summary>O bookgest comunica ao SIBA e emite as faturas por mim?</summary>
-        <p>Reúne os dados, calcula o que é preciso e avisa dos prazos. A fatura-recibo fica preparada campo a campo, pronta a
-          copiar para o Portal das Finanças (gratuito), ou para o seu programa de faturação certificado. A comunicação
-          ao SIBA faz-se no sistema oficial.</p></details>
+        <p>Ao SIBA, sim: com o alojamento registado no SIBA em modo webservice, os boletins seguem automaticamente.
+          A fatura-recibo é emitida no seu programa de faturação (InvoiceXpress, Vendus ou TOConline) com um clique,
+          ou fica preparada campo a campo para o Portal das Finanças (gratuito).</p></details>
       <details><summary>Quanto custa a conta Cloudflare do modo Privado?</summary>
         <p>Nada: o plano gratuito chega para um pequeno gestor de Alojamento Local.</p></details>
       <details><summary>E se deixar de pagar?</summary>

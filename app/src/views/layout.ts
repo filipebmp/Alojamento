@@ -4,7 +4,7 @@ import { VERSAO } from "../versao";
 
 type Conteudo = HtmlEscapedString | Promise<HtmlEscapedString>;
 
-export type Seccao = "hoje" | "calendario" | "reservas" | "tmt" | "alojamentos" | "emails" | "faturacao" | "utilizadores" | "definicoes" | "conta" | "mais";
+export type Seccao = "hoje" | "calendario" | "reservas" | "tmt" | "alojamentos" | "emails" | "faturacao" | "ine" | "utilizadores" | "definicoes" | "conta" | "mais";
 
 // Ícones de traço (24×24), herdam a cor do texto.
 const ICONES = {
@@ -17,6 +17,7 @@ const ICONES = {
   definicoes: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
   conta: '<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
   faturacao: '<path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M8 13h8M8 17h5"/>',
+  ine: '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
   utilizadores: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M18 14a6.5 6.5 0 0 1 3.5 6"/>',
   mais: '<circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/>',
   mais_reserva: '<path d="M12 5v14M5 12h14"/>',
@@ -52,6 +53,7 @@ const MENU_GESTOR: ItemMenu[] = [
   { seccao: "alojamentos", nome: "Alojamentos", link: "/admin/alojamentos", descricao: "Dados, código das chaves, calendários e instruções" },
   { seccao: "emails", nome: "Emails de reserva", link: "/admin/emails", descricao: "Reencaminhar os emails do Booking e do Airbnb" },
   { seccao: "faturacao", nome: "Faturação", link: "/admin/definicoes/faturacao", descricao: "Ligar o programa de faturação" },
+  { seccao: "ine", nome: "INE", link: "/admin/ine", descricao: "Relatório mensal do inquérito (IPHH)" },
   { seccao: "utilizadores", nome: "Utilizadores", link: "/admin/utilizadores", descricao: "Gestores e equipa com acesso ao painel" },
   { seccao: "definicoes", nome: "Definições", link: "/admin/definicoes", descricao: "Licença e versão" },
   { seccao: "conta", nome: "A minha conta", link: "/admin/conta", descricao: "Email, palavra-passe, códigos de recuperação" },

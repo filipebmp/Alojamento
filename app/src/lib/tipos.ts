@@ -20,6 +20,8 @@ export interface Reserva {
   incompleta: number;
   ignorada: number;
   desaparecida_em: string | null;
+  siba_erro?: string | null;
+  siba_tentativa_em?: string | null;
   fatura_programa: string | null;
   fatura_externa_id: string | null;
   fatura_pdf: string | null;
@@ -77,6 +79,12 @@ export interface Alojamento {
   tmt_alta_inicio: number | null;
   tmt_alta_fim: number | null;
   regime_iva: RegimeIva;
+  ine_responde: number;
+  modalidade: string;
+  tipologia: string;
+  quartos: number | null;
+  camas_individuais: number;
+  camas_casal: number;
   criado_em: string;
 }
 

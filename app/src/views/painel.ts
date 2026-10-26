@@ -40,6 +40,7 @@ function chipPrazo(prazo: string | null, hoje: string) {
 
 const ICONE_PENDENTE: Record<Pendente["tipo"], NomeIcone> = {
   email: "emails",
+  ine: "ine",
   completar: "reservas",
   desaparecida: "calendario",
   formulario: "conta",

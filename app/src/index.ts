@@ -79,8 +79,13 @@ import {
 import { paginaHospede } from "./views/hospede";
 import { type VistaReservas, paginaCalendario, paginaHoje, paginaMais, paginaReservas } from "./views/painel";
 import { barrasCalendario, numerosHoje } from "./lib/painel";
-import { faturaPortal, regimeIvaValido } from "./lib/faturacao";
+import { faturaPortal, nomePais, regimeIvaValido } from "./lib/faturacao";
 import { paisValido } from "./lib/paises";
+import { MODALIDADES, TIPOLOGIAS, csvIne, relatorioIne } from "./lib/ine";
+import { capacidadeIne, paginaIne } from "./views/ine";
+import { nomeMes } from "./views/layout";
+import { type ConfigSiba, validarConfigSiba } from "./lib/siba";
+import { enviarPendentesSiba, enviarReservaSiba, lerConfigSiba } from "./lib/siba-envio";
 import { NOMES_PROGRAMA, emitir, gravarConfigFaturacao, lerConfigFaturacao, lerFormularioFaturacao, testarLigacao } from "./lib/programas-faturacao";
 import { paginaFaturacao } from "./views/faturacao";
 import { paginaFaturaPortal } from "./views/fatura-portal";
@@ -331,8 +336,8 @@ const soGestor = async (c: Ctx, next: () => Promise<void>) => {
 for (const caminho of [
   "/admin/alojamentos", "/admin/alojamentos/*", "/admin/instrucoes", "/admin/tmt", "/admin/tmt/*",
   "/admin/definicoes", "/admin/definicoes/*", "/admin/utilizadores", "/admin/utilizadores/*",
-  "/admin/reservas/:id/valores", "/admin/reservas/:id/siba", "/admin/reservas/:id/fatura", "/admin/reservas/:id/fatura/portal", "/admin/reservas/:id/fatura/emitir", "/admin/reservas/:id/fatura/anular", "/admin/reservas/:id/siba/anular", "/admin/reservas/:id/cancelar",
-  "/admin/reservas/:id/ignorar", "/admin/reservas/:id/manter", "/admin/emails", "/admin/emails/*", "/admin/mais",
+  "/admin/reservas/:id/valores", "/admin/reservas/:id/siba", "/admin/reservas/:id/fatura", "/admin/reservas/:id/fatura/portal", "/admin/reservas/:id/fatura/emitir", "/admin/reservas/:id/fatura/anular", "/admin/reservas/:id/siba/anular", "/admin/reservas/:id/siba/enviar", "/admin/reservas/:id/cancelar",
+  "/admin/reservas/:id/ignorar", "/admin/reservas/:id/manter", "/admin/emails", "/admin/emails/*", "/admin/mais", "/admin/ine", "/admin/ine/*", "/admin/ine.csv",
 ]) {
   app.use(caminho, soGestor);
 }
@@ -375,6 +380,18 @@ app.get("/admin", async (c) => {
       descricao: e.estado === "confirmacao" ? "Confirmar o reencaminhamento de emails (Gmail)" : `${e.n} email(s) de reserva por associar`,
       prazo: null,
       link: "/admin/emails",
+    });
+  }
+  // INE: o mês anterior responde-se até dia 10 (só nos alojamentos marcados).
+  const mesAnterior = mesesIne(agora)[1];
+  const respostasIne = await c.env.DB.prepare("SELECT alojamento_id FROM ine_respostas WHERE mes = ?").bind(mesAnterior).all<{ alojamento_id: number }>();
+  for (const a of alojamentos.filter((x) => x.ativo && x.ine_responde && !respostasIne.results.some((r) => r.alojamento_id === x.id))) {
+    todos.push({
+      tipo: "ine",
+      descricao: `Responder ao inquérito do INE (${nomeMes(`${mesAnterior}-01`)})`,
+      prazo: `${mesesIne(agora)[0]}-10`,
+      alojamentoId: a.id,
+      link: `/admin/ine?mes=${mesAnterior}`,
     });
   }
   const pendentes = p === "gestor" ? todos : todos.filter((x) => ["completar", "formulario", "dados_hospedes"].includes(x.tipo));
@@ -441,6 +458,66 @@ app.get("/admin/reservas", async (c) => {
 
 app.get("/admin/mais", (c) => c.html(paginaMais()));
 
+// ---------- INE (inquérito mensal IPHH) ----------
+
+// Últimos 12 meses (o mais recente primeiro), incluindo o atual.
+function mesesIne(agora: Date): string[] {
+  let m = hojeLisboa(agora).slice(0, 7);
+  const lista: string[] = [];
+  for (let i = 0; i < 12; i++) {
+    lista.push(m);
+    const [a, n] = m.split("-").map(Number);
+    m = n === 1 ? `${a - 1}-12` : `${a}-${String(n - 1).padStart(2, "0")}`;
+  }
+  return lista;
+}
+
+async function relatoriosIne(db: D1Database, mes: string, alojamentoId?: number) {
+  const [reservas, alojamentos, respostas] = await Promise.all([
+    listarReservas(db),
+    listarAlojamentos(db),
+    db.prepare("SELECT alojamento_id, respondido_em FROM ine_respostas WHERE mes = ?").bind(mes).all<{ alojamento_id: number; respondido_em: string }>(),
+  ]);
+  return alojamentos
+    .filter((a) => a.ine_responde && (alojamentoId == null || a.id === alojamentoId))
+    .map((a) => ({
+      alojamento: a,
+      relatorio: relatorioIne(reservas.filter((rc) => rc.reserva.alojamento_id === a.id), a, mes),
+      respondidoEm: respostas.results.find((x) => x.alojamento_id === a.id)?.respondido_em ?? null,
+    }));
+}
+
+app.get("/admin/ine", async (c) => {
+  const meses = mesesIne(new Date());
+  const mes = meses.includes(c.req.query("mes") ?? "") ? c.req.query("mes")! : meses[1];
+  return c.html(paginaIne(mes, meses, await relatoriosIne(c.env.DB, mes)));
+});
+
+app.get("/admin/ine.csv", async (c) => {
+  const mes = c.req.query("mes") ?? "";
+  if (!/^\d{4}-\d{2}$/.test(mes)) return c.notFound();
+  const [r] = await relatoriosIne(c.env.DB, mes, Number(c.req.query("alojamento")));
+  if (!r) return c.notFound();
+  const csv = csvIne(r.relatorio, r.alojamento.nome, nomePais, capacidadeIne(r.alojamento).map(([k, v]) => `${k};${v}`));
+  return c.body(csv, 200, {
+    "Content-Type": "text/csv; charset=utf-8",
+    "Content-Disposition": `attachment; filename="ine-${mes}-${r.alojamento.id}.csv"`,
+  });
+});
+
+app.post("/admin/ine/:alojamento/:mes/respondido", async (c) => {
+  const mes = c.req.param("mes");
+  if (!/^\d{4}-\d{2}$/.test(mes)) return c.notFound();
+  await c.env.DB.prepare("INSERT OR REPLACE INTO ine_respostas (alojamento_id, mes, respondido_em) VALUES (?, ?, ?)")
+    .bind(Number(c.req.param("alojamento")), mes, new Date().toISOString()).run();
+  return c.redirect(`/admin/ine?mes=${mes}`);
+});
+
+app.post("/admin/ine/:alojamento/:mes/anular", async (c) => {
+  await c.env.DB.prepare("DELETE FROM ine_respostas WHERE alojamento_id = ? AND mes = ?").bind(Number(c.req.param("alojamento")), c.req.param("mes")).run();
+  return c.redirect(`/admin/ine?mes=${c.req.param("mes")}`);
+});
+
 app.get("/admin/reservas/nova", async (c) => {
   const bloqueio = await bloqueioReservas(c);
   if (bloqueio) return bloqueio;
@@ -489,6 +566,13 @@ app.get("/admin/reservas/:id", async (c) => {
     teste: cfgFaturacao?.programa === "vendus" && cfgFaturacao.teste,
     erro: c.req.query("erro_fatura")?.slice(0, 400) ?? null,
     aviso: c.req.query("aviso_fatura")?.slice(0, 400) ?? null,
+    siba: await (async () => {
+      const s = await lerConfigSiba(c.env.DB, alojamento.id);
+      if (!s?.ativo) return null;
+      const enviados = await c.env.DB.prepare("SELECT COUNT(*) AS n FROM hospedes WHERE reserva_id = ? AND siba_enviado_em IS NOT NULL")
+        .bind(rc.reserva.id).first<number>("n");
+      return { ativo: true, teste: !!s.teste, enviados: enviados ?? 0 };
+    })(),
     declaracaoTmt: await c.env.DB.prepare("SELECT * FROM declaracoes_tmt_alojamento WHERE alojamento_id = ? AND mes = ?")
       .bind(alojamento.id, rc.reserva.checkin.slice(0, 7))
       .first<DeclaracaoTmt>(),
@@ -505,6 +589,11 @@ app.post("/admin/reservas/:id/valores", async (c) => {
     await c.env.DB.prepare("UPDATE reservas SET origem = ? WHERE id = ? AND uid_externo IS NULL").bind(origemValida(b.origem), Number(c.req.param("id"))).run();
   }
   return c.redirect(`/admin/reservas/${c.req.param("id")}`);
+});
+
+app.post("/admin/reservas/:id/siba/enviar", async (c) => {
+  await enviarReservaSiba(c.env.DB, Number(c.req.param("id")));
+  return c.redirect(`/admin/reservas/${c.req.param("id")}#siba`);
 });
 
 app.post("/admin/reservas/:id/siba/anular", async (c) => {
@@ -756,8 +845,8 @@ app.post("/admin/alojamentos", async (c) => {
   const res = await c.env.DB.prepare(
     `INSERT INTO alojamentos (nome, morada, registo_al, codigo_cofre, hora_checkin, horas_antes_codigo, horas_prazo_hospedes,
        concelho, tmt_valor_cents, tmt_max_noites, tmt_idade_minima, tmt_dia_declaracao, tmt_dia_pagamento, tmt_portal, regime_iva,
-       tmt_valor_baixa_cents, tmt_alta_inicio, tmt_alta_fim, criado_em)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       tmt_valor_baixa_cents, tmt_alta_inicio, tmt_alta_fim, ine_responde, modalidade, tipologia, quartos, camas_individuais, camas_casal, criado_em)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   )
     .bind(...valoresAlojamento(v), new Date().toISOString())
     .run();
@@ -771,7 +860,48 @@ app.get("/admin/alojamentos/:id", async (c) => {
     guardado: c.req.query("guardado") === "1",
     calendarios: await listarCalendarios(c.env.DB, a.id),
     reservas: await contarReservasAlojamento(c.env.DB, a.id),
+    siba: await lerConfigSiba(c.env.DB, a.id),
   }));
+});
+
+app.post("/admin/alojamentos/:id/siba", async (c) => {
+  const a = await obterAlojamento(c.env.DB, Number(c.req.param("id")));
+  if (!a) return c.notFound();
+  const b = await c.req.parseBody<Record<string, string>>();
+  const atual = await lerConfigSiba(c.env.DB, a.id);
+  const t = (k: string) => b[k]?.trim() ?? "";
+  const dados = {
+    ativo: b.ativo === "1" ? 1 : 0,
+    teste: b.teste === "0" ? 0 : 1,
+    nif: t("nif").replace(/\D/g, ""),
+    estabelecimento: t("estabelecimento").padStart(2, "0"),
+    chave: t("chave") || atual?.chave || "",
+    abreviatura: t("abreviatura"),
+    localidade: t("localidade"),
+    codigo_postal: t("codigo_postal"),
+    telefone: t("telefone"),
+    contacto_nome: t("contacto_nome"),
+    contacto_email: t("contacto_email"),
+  };
+  const erro = validarConfigSiba(dados) ?? (dados.ativo && !a.morada ? "Indique a morada do alojamento (em Identificação): o SIBA exige-a." : null);
+  if (erro) {
+    return c.html(paginaAlojamento(a, {
+      calendarios: await listarCalendarios(c.env.DB, a.id),
+      reservas: await contarReservasAlojamento(c.env.DB, a.id),
+      siba: atual ?? ({ alojamento_id: a.id, numero_ficheiro: 0, ...dados } as ConfigSiba),
+      erroSiba: erro,
+    }), 400);
+  }
+  await c.env.DB.prepare(
+    `INSERT INTO siba_config (alojamento_id, ativo, teste, nif, estabelecimento, chave, abreviatura, localidade, codigo_postal, telefone, contacto_nome, contacto_email)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(alojamento_id) DO UPDATE SET ativo = excluded.ativo, teste = excluded.teste, nif = excluded.nif,
+       estabelecimento = excluded.estabelecimento, chave = excluded.chave, abreviatura = excluded.abreviatura,
+       localidade = excluded.localidade, codigo_postal = excluded.codigo_postal, telefone = excluded.telefone,
+       contacto_nome = excluded.contacto_nome, contacto_email = excluded.contacto_email`,
+  ).bind(a.id, dados.ativo, dados.teste, dados.nif, dados.estabelecimento, dados.chave, dados.abreviatura, dados.localidade,
+    dados.codigo_postal, dados.telefone, dados.contacto_nome, dados.contacto_email).run();
+  return c.redirect(`/admin/alojamentos/${a.id}?guardado=1#siba`);
 });
 
 // Reservas a sério (as datas marcadas como "não é uma reserva" não contam).
@@ -846,7 +976,8 @@ app.post("/admin/alojamentos/:id", async (c) => {
     `UPDATE alojamentos SET nome = ?, morada = ?, registo_al = ?, codigo_cofre = ?, hora_checkin = ?, horas_antes_codigo = ?,
        horas_prazo_hospedes = ?, concelho = ?, tmt_valor_cents = ?, tmt_max_noites = ?, tmt_idade_minima = ?,
        tmt_dia_declaracao = ?, tmt_dia_pagamento = ?, tmt_portal = ?, regime_iva = ?,
-       tmt_valor_baixa_cents = ?, tmt_alta_inicio = ?, tmt_alta_fim = ?
+       tmt_valor_baixa_cents = ?, tmt_alta_inicio = ?, tmt_alta_fim = ?,
+       ine_responde = ?, modalidade = ?, tipologia = ?, quartos = ?, camas_individuais = ?, camas_casal = ?
      WHERE id = ?`,
   )
     .bind(...valoresAlojamento(v), a.id)
@@ -1251,6 +1382,11 @@ app.get("/c/:token/passo/:id", async (c) => {
   return responderImagem(c.env.DB, Number(c.req.param("id")), alojamento.id);
 });
 
+// Assim que o hóspede completa os dados, os boletins seguem para o SIBA (se o alojamento tiver o envio ligado).
+function enviarSibaEmSegundoPlano(c: Ctx, reservaId: number) {
+  c.executionCtx.waitUntil(enviarReservaSiba(c.env.DB, reservaId).catch((e) => console.error("SIBA", e)));
+}
+
 app.post("/c/:token/titular", async (c) => {
   const token = c.req.param("token");
   const rc = await obterReservaPorToken(c.env.DB, token);
@@ -1290,6 +1426,7 @@ app.post("/c/:token/titular", async (c) => {
     ).bind(r.id, b.f_nome.trim(), b.f_nif.replace(/\s/g, ""), pais(b.f_pais), b.f_morada?.trim() || null,
       b.f_codigo_postal?.trim() || null, b.f_cidade?.trim() || null, b.f_email?.trim() || null),
   ]);
+  enviarSibaEmSegundoPlano(c, rc.reserva.id);
   return c.redirect(`/c/${token}`);
 });
 
@@ -1306,6 +1443,7 @@ app.post("/c/:token/hospede/:id", async (c) => {
   )
     .bind(h.nome, h.data_nascimento, h.nacionalidade, h.pais_residencia, h.doc_tipo, h.doc_numero, h.doc_pais, id, rc.reserva.id)
     .run();
+  enviarSibaEmSegundoPlano(c, rc.reserva.id);
   return c.redirect(`/c/${token}`);
 });
 
@@ -1341,6 +1479,14 @@ function lerAlojamento(b: Record<string, string>) {
   if (portal && !/^https:\/\/\S+$/.test(portal)) return "O endereço do portal da câmara tem de começar por https://";
   const regimeIva = b.regime_iva ?? "6";
   if (!regimeIvaValido(regimeIva)) return "Escolha o regime de IVA.";
+  // Capacidade (para o INE).
+  const modalidade = MODALIDADES.some(([m]) => m === b.modalidade) ? b.modalidade : "apartamento";
+  const tipologia = (TIPOLOGIAS as readonly string[]).includes(b.tipologia) ? b.tipologia : "T1";
+  const emQuartos = ["quartos", "hospedagem", "hostel"].includes(modalidade);
+  const quartos = b.quartos?.trim() ? inteiro("quartos", 1, 200) : null;
+  const camasIndividuais = b.camas_individuais?.trim() ? inteiro("camas_individuais", 0, 500) : 0;
+  const camasCasal = b.camas_casal?.trim() ? inteiro("camas_casal", 0, 500) : 0;
+  if (camasIndividuais == null || camasCasal == null || (emQuartos && b.quartos?.trim() && quartos == null)) return "Confira a capacidade (quartos e camas).";
   // Épocas: só com valor da época baixa e os dois meses da época alta.
   const baixa = b.tmt_valor_baixa?.trim() ? cents(b.tmt_valor_baixa) : null;
   const altaDe = b.tmt_alta_inicio?.trim() ? inteiro("tmt_alta_inicio", 1, 12) : null;
@@ -1354,6 +1500,12 @@ function lerAlojamento(b: Record<string, string>) {
     horas_antes_codigo: horasAntes, horas_prazo_hospedes: horasPrazo, concelho: concelho ?? "", tmt_valor_cents: valor,
     tmt_max_noites: maxNoites, tmt_idade_minima: idade, tmt_dia_declaracao: diaDecl, tmt_dia_pagamento: diaPag, tmt_portal: portal,
     regime_iva: regimeIva,
+    ine_responde: b.ine_responde === "1" ? 1 : 0,
+    modalidade,
+    tipologia,
+    quartos: emQuartos ? quartos : null,
+    camas_individuais: camasIndividuais,
+    camas_casal: camasCasal,
     tmt_valor_baixa_cents: comEpocas ? baixa : null,
     tmt_alta_inicio: comEpocas ? altaDe : null,
     tmt_alta_fim: comEpocas ? altaAte : null,
@@ -1364,7 +1516,8 @@ function lerAlojamento(b: Record<string, string>) {
 function valoresAlojamento(v: Exclude<ReturnType<typeof lerAlojamento>, string>) {
   return [v.nome, v.morada, v.registo_al, v.codigo_cofre, v.hora_checkin, v.horas_antes_codigo, v.horas_prazo_hospedes,
     v.concelho, v.tmt_valor_cents, v.tmt_max_noites, v.tmt_idade_minima, v.tmt_dia_declaracao, v.tmt_dia_pagamento, v.tmt_portal, v.regime_iva,
-    v.tmt_valor_baixa_cents, v.tmt_alta_inicio, v.tmt_alta_fim];
+    v.tmt_valor_baixa_cents, v.tmt_alta_inicio, v.tmt_alta_fim,
+    v.ine_responde, v.modalidade, v.tipologia, v.quartos, v.camas_individuais, v.camas_casal];
 }
 
 function lerHospede(b: Record<string, string>, p: string) {
@@ -1408,6 +1561,7 @@ export default {
       await prepararInstalacao(env.DB, env.CODIGO_CHAVES);
       await sincronizarTodos(env.DB);
       await receberEmailsReservas(env);
+      await enviarPendentesSiba(env.DB).catch((e) => console.error("SIBA", e));
       const estado = await lerDefinicao(env.DB, "licenca_estado");
       const ultima = estado ? Date.parse((JSON.parse(estado) as EstadoGuardado).verificadoEm) : 0;
       if (Date.now() - ultima > 20 * 3_600_000 || (await lerDefinicao(env.DB, "licenca_erro"))) await verificarLicenca(env);

@@ -15,6 +15,8 @@ import { dataCurta, dataPt, icone, nomeMes, pagina } from "./layout";
 import { chipOrigem, classePrazo } from "./painel";
 import { diferencaDias } from "../lib/datas";
 import { REGIMES_IVA } from "../lib/faturacao";
+import type { ConfigSiba } from "../lib/siba";
+import { MODALIDADES, TIPOLOGIAS } from "../lib/ine";
 import { NOMES_PROGRAMA, type Programa } from "../lib/programas-faturacao";
 
 export function paginaLogin(opcoes: { erro?: string; legado?: boolean; email?: string } = {}) {
@@ -82,7 +84,14 @@ export function paginaReserva(
   pendentes: Pendente[],
   agora: Date,
   papel: Papel,
-  faturacao: { programa: Programa | null; teste?: boolean; erro?: string | null; aviso?: string | null; declaracaoTmt?: DeclaracaoTmt | null } = { programa: null },
+  faturacao: {
+    programa: Programa | null;
+    teste?: boolean;
+    erro?: string | null;
+    aviso?: string | null;
+    declaracaoTmt?: DeclaracaoTmt | null;
+    siba?: { ativo: boolean; teste: boolean; enviados: number } | null;
+  } = { programa: null },
 ) {
   const gestor = papel === "gestor";
   const { reserva: r, hospedes, faturacao: f } = rc;
@@ -150,12 +159,16 @@ export function paginaReserva(
           passo({
             titulo: "Comunicação ao SIBA",
             sub: estrangeiros.length
-              ? r.siba_submetido_em ? `Comunicado em ${dataPt(r.siba_submetido_em)}` : `${estrangeiros.length} hóspede(s) estrangeiro(s)`
+              ? r.siba_submetido_em ? `Comunicado em ${dataPt(r.siba_submetido_em)}`
+                : faturacao.siba?.ativo && r.siba_erro ? "Envio automático com erro"
+                : faturacao.siba?.ativo && r.checkin > hoje ? `Envio automático no dia do check-in`
+                : faturacao.siba?.ativo ? "Envio automático quando os dados estiverem completos"
+                : `${estrangeiros.length} hóspede(s) estrangeiro(s)`
               : hospedesFeitos ? "Sem hóspedes estrangeiros" : "Depende dos hóspedes",
             feito: !!r.siba_submetido_em || (hospedesFeitos && !estrangeiros.length),
             p: pendente("siba"),
             ancora: "siba",
-            acao: estrangeiros.length && !r.siba_submetido_em ? "Comunicar" : undefined,
+            acao: estrangeiros.length && !r.siba_submetido_em ? (faturacao.siba?.ativo ? "Ver" : "Comunicar") : undefined,
           }),
           passo({
             titulo: "Fatura-recibo",
@@ -248,14 +261,30 @@ export function paginaReserva(
     ${gestor ? html`
     <section class="cartao" id="siba">
       <h2>SIBA</h2>
+      ${faturacao.siba?.ativo
+        ? html`<p class="nota">Envio automático pelo webservice do SIBA${faturacao.siba.teste ? " (ambiente de testes: não tem valor legal)" : ""}.</p>`
+        : ""}
       ${estrangeiros.length
-        ? html`<p>${estrangeiros.length} hóspede(s) estrangeiro(s) a comunicar em
-            <a href="https://siba.ssi.gov.pt" target="_blank" rel="noopener">siba.ssi.gov.pt</a>
-            (entrada ${dataPt(r.checkin)}, saída ${dataPt(r.checkout)}).</p>
+        ? html`${faturacao.siba?.ativo
+            ? html`${r.siba_erro && !r.siba_submetido_em
+                ? html`<p class="aviso">O SIBA recusou o envio${r.siba_tentativa_em ? ` (${dataPt(r.siba_tentativa_em)})` : ""}: ${r.siba_erro}</p>`
+                : ""}
+              ${!r.siba_submetido_em && r.checkin > hoje ? html`<p>Agendado: os boletins seguem no dia do check-in (${dataPt(r.checkin)}).</p>` : ""}
+              ${!r.siba_submetido_em && r.checkin <= hoje && faturacao.siba.enviados
+                ? html`<p>${faturacao.siba.enviados} boletim(ns) enviado(s); falta(m) os dados de outros hóspedes.</p>`
+                : ""}
+              ${!r.siba_submetido_em && r.checkin <= hoje
+                ? html`<form method="post" action="/admin/reservas/${r.id}/siba/enviar"
+                    onsubmit="this.querySelector('button').disabled = true; this.querySelector('button').textContent = 'A enviar…'">
+                    <button>${r.siba_erro ? "Reenviar ao SIBA" : "Enviar ao SIBA agora"}</button></form>`
+                : ""}`
+            : html`<p>${estrangeiros.length} hóspede(s) estrangeiro(s) a comunicar em
+                <a href="https://siba.ssi.gov.pt" target="_blank" rel="noopener">siba.ssi.gov.pt</a>
+                (entrada ${dataPt(r.checkin)}, saída ${dataPt(r.checkout)}).</p>`}
           ${r.siba_submetido_em
             ? html`<div class="botoes"><span>✅ Comunicado em ${dataPt(r.siba_submetido_em)}</span>
                 ${anular(`/admin/reservas/${r.id}/siba/anular`, "Anular a marcação de comunicado ao SIBA? (Só no bookgest: nada é enviado ao SIBA.)")}</div>`
-            : html`<form method="post" action="/admin/reservas/${r.id}/siba"><button>Marcar como comunicado</button></form>`}`
+            : html`<form method="post" action="/admin/reservas/${r.id}/siba"><button class="${faturacao.siba?.ativo ? "secundario" : ""}">${faturacao.siba?.ativo ? "Já comuniquei à mão" : "Marcar como comunicado"}</button></form>`}`
         : html`<p>Sem hóspedes estrangeiros registados.</p>`}
     </section>
 
@@ -707,7 +736,16 @@ const seletorMes = (nome: string, atual: number | null | undefined) => html`<sel
 
 export function paginaAlojamento(
   a: Alojamento | null,
-  opcoes: { primeiro?: boolean; erro?: string; guardado?: boolean; codigoSugerido?: string; calendarios?: Calendario[]; reservas?: number } = {},
+  opcoes: {
+    primeiro?: boolean;
+    erro?: string;
+    guardado?: boolean;
+    codigoSugerido?: string;
+    calendarios?: Calendario[];
+    reservas?: number;
+    siba?: ConfigSiba | null;
+    erroSiba?: string;
+  } = {},
 ) {
   const v = (x: string | number | null | undefined) => x ?? "";
   const titulo = a ? a.nome : opcoes.primeiro ? "O seu primeiro alojamento" : "Novo alojamento";
@@ -765,6 +803,30 @@ export function paginaAlojamento(
         <label>Portal da câmara (endereço) <input name="tmt_portal" inputmode="url" value="${v(a?.tmt_portal)}" placeholder="https://"></label>
       </section>
       <section class="cartao">
+        <h2>Capacidade e INE</h2>
+        <label>Modalidade
+          <select name="modalidade" data-modalidade>${MODALIDADES.map(([m, t]) => html`<option value="${m}"${(a?.modalidade ?? "apartamento") === m ? " selected" : ""}>${t}</option>`)}</select></label>
+        <label data-so="apartamento moradia">Tipologia
+          <select name="tipologia">${TIPOLOGIAS.map((t) => html`<option value="${t}"${(a?.tipologia ?? "T1") === t ? " selected" : ""}>${t}</option>`)}</select></label>
+        <label data-so="quartos hospedagem hostel">N.º de quartos <input type="number" name="quartos" min="1" max="200" value="${a?.quartos ?? ""}"></label>
+        <div class="linha">
+          <label>Camas individuais <input type="number" name="camas_individuais" min="0" max="500" value="${a?.camas_individuais ?? 0}"></label>
+          <label>Camas de casal <input type="number" name="camas_casal" min="0" max="500" value="${a?.camas_casal ?? 0}"></label>
+        </div>
+        <label class="opcao"><input type="checkbox" name="ine_responde" value="1"${a?.ine_responde ? " checked" : ""}>
+          Respondo ao inquérito mensal do INE (IPHH) — lembrete até ao dia 10 e relatório pronto a transcrever</label>
+        <p class="nota">O INE inquire os alojamentos com 10 ou mais camas (e, nas regiões autónomas, também alguns mais pequenos).
+          Se recebeu o pedido do INE, ative esta opção.</p>
+      </section>
+      <script>
+      (() => {
+        const m = document.querySelector("[data-modalidade]");
+        const mostrar = () => document.querySelectorAll("[data-so]").forEach((x) => { x.hidden = !x.dataset.so.split(" ").includes(m.value); });
+        m.addEventListener("change", mostrar);
+        mostrar();
+      })();
+      </script>
+      <section class="cartao">
         <h2>Faturação</h2>
         <label>Regime de IVA
           <select name="regime_iva">${REGIMES_IVA.map((x) => html`<option value="${x.valor}"${(a?.regime_iva ?? "6") === x.valor ? " selected" : ""}>${x.nome}</option>`)}</select></label>
@@ -784,10 +846,43 @@ export function paginaAlojamento(
           : ""}`
       : ""}
     ${a ? seccaoCalendarios(a, opcoes.calendarios ?? []) : ""}
+    ${a ? seccaoSiba(a, opcoes.siba ?? null, opcoes.erroSiba) : ""}
     ${SCRIPT_CONCELHO}`, { admin: true, seccao: "alojamentos", voltar: "/admin/alojamentos" });
 }
 
 // ---------- Calendários (importação de reservas) ----------
+
+// Envio automático ao SIBA: os dados do estabelecimento registado no SIBA (modo de envio "webservice").
+function seccaoSiba(a: Alojamento, s: ConfigSiba | null, erro?: string) {
+  const v = (x: string | undefined) => x ?? "";
+  return html`<section class="cartao" id="siba">
+    <h2>SIBA (envio automático)</h2>
+    <p class="nota">O bookgest envia os boletins dos hóspedes estrangeiros ao SIBA assim que o check-in fica completo
+      (as chegadas futuras seguem no dia do check-in). Para isso, o alojamento tem de estar registado no
+      <a href="https://siba.ssi.gov.pt" target="_blank" rel="noopener">SIBA</a> com o modo de envio <strong>webservice</strong>;
+      o SIBA envia por ofício a chave de acesso.</p>
+    ${erro ? html`<p class="aviso">${erro}</p>` : ""}
+    <form method="post" action="/admin/alojamentos/${a.id}/siba">
+      <label class="opcao"><input type="checkbox" name="ativo" value="1"${s?.ativo ? " checked" : ""}> Enviar automaticamente ao SIBA</label>
+      <label>NIF / NIPC registado no SIBA <input name="nif" inputmode="numeric" value="${v(s?.nif)}" maxlength="9"></label>
+      <label>N.º do estabelecimento no SIBA <input name="estabelecimento" inputmode="numeric" value="${s?.estabelecimento ?? "00"}" maxlength="2"></label>
+      <label>Chave de acesso <input type="password" name="chave" autocomplete="off" inputmode="numeric" placeholder="${s ? "(guardada — deixe vazio para manter)" : ""}"></label>
+      <label>Abreviatura (até 15 letras) <input name="abreviatura" value="${s?.abreviatura ?? a.nome.slice(0, 15)}" maxlength="15"></label>
+      <label>Localidade <input name="localidade" value="${v(s?.localidade ?? a.concelho)}" maxlength="30"></label>
+      <label>Código postal <input name="codigo_postal" value="${v(s?.codigo_postal)}" placeholder="0000-000" maxlength="8"></label>
+      <label>Telefone <input name="telefone" inputmode="tel" value="${v(s?.telefone)}"></label>
+      <label>Nome do contacto <input name="contacto_nome" value="${v(s?.contacto_nome)}" maxlength="40"></label>
+      <label>Email do contacto <input type="email" name="contacto_email" value="${v(s?.contacto_email)}"></label>
+      <label>Ambiente
+        <select name="teste">
+          <option value="1"${!s || s.teste ? " selected" : ""}>Testes (desenvolvimento do SIBA, sem valor legal)</option>
+          <option value="0"${s && !s.teste ? " selected" : ""}>Produção (envio real)</option>
+        </select></label>
+      <p class="nota">A morada enviada é a da identificação do alojamento. Comece em testes; quando o SIBA aceitar os envios, mude para produção.</p>
+      <button type="submit">Guardar</button>
+    </form>
+  </section>`;
+}
 
 function seccaoCalendarios(a: Alojamento, calendarios: Calendario[]) {
   return html`<section class="cartao" id="calendarios">
