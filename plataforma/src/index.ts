@@ -3,9 +3,11 @@ import { deleteCookie, getCookie, getSignedCookie, setCookie, setSignedCookie } 
 import {
   CAMINHO_API_EMAILS_RESERVAS,
   type EmailReservaEntregue,
+  CAMINHO_API_EMAIL_AVISOS,
   CAMINHO_API_EMAIL_RECUPERACAO,
   CAMINHO_API_LICENCA,
   type RespostaLicenca,
+  pedidoAvisosValido,
   pedidoEmailValido,
   pedidoValido,
 } from "../../comum/licenca";
@@ -26,7 +28,9 @@ import {
 import { Cloudflare } from "../../comum/cloudflare";
 import {
   type ConfigEmail,
+  emailAvisos,
   emailConfirmarRegisto,
+  linkPainel,
   emailEnderecos,
   emailInstalacaoPronta,
   emailLicencaCortesia,
@@ -633,8 +637,8 @@ app.post(CAMINHO_API_EMAIL_RECUPERACAO, async (c) => {
   const desde = new Date(Date.now() - 3_600_000).toISOString();
   const para = await hashEmail(pedido.para);
   const [porLicenca, porDestinatario] = await Promise.all([
-    db.prepare("SELECT COUNT(*) AS n FROM envios_email WHERE licenca_id = ? AND enviado_em > ?").bind(licenca.id, desde).first<number>("n"),
-    db.prepare("SELECT COUNT(*) AS n FROM envios_email WHERE para_hash = ? AND enviado_em > ?").bind(para, desde).first<number>("n"),
+    db.prepare("SELECT COUNT(*) AS n FROM envios_email WHERE licenca_id = ? AND enviado_em > ? AND tipo = 'recuperacao'").bind(licenca.id, desde).first<number>("n"),
+    db.prepare("SELECT COUNT(*) AS n FROM envios_email WHERE para_hash = ? AND enviado_em > ? AND tipo = 'recuperacao'").bind(para, desde).first<number>("n"),
   ]);
   if ((porLicenca ?? 0) >= LIMITE_POR_LICENCA_HORA || (porDestinatario ?? 0) >= LIMITE_POR_DESTINATARIO_HORA) {
     return c.json({ erro: "Demasiados pedidos: tente daqui a uma hora" }, 429);
@@ -646,6 +650,42 @@ app.post(CAMINHO_API_EMAIL_RECUPERACAO, async (c) => {
     return c.json({ erro: "O envio do email falhou" }, 502);
   }
   await db.prepare("INSERT INTO envios_email (licenca_id, para_hash, enviado_em) VALUES (?, ?, ?)")
+    .bind(licenca.id, para, new Date().toISOString())
+    .run();
+  return c.json({ ok: true }, 202);
+});
+
+// Aviso diário ao gestor. O texto é sempre o da plataforma (só recebe tipos e quantidades) e o botão leva à
+// instalação da licença (ou a um endereço bookgest.pt): não serve para enviar outros conteúdos.
+const LIMITE_AVISOS_POR_LICENCA_DIA = 10;
+const LIMITE_AVISOS_POR_DESTINATARIO_DIA = 2;
+
+app.post(CAMINHO_API_EMAIL_AVISOS, async (c) => {
+  const pedido = await c.req.json().catch(() => null);
+  if (!pedidoAvisosValido(pedido)) return c.json({ erro: "Pedido inválido" }, 400);
+  const cfg = configEmail(c.env);
+  if (!cfg) return c.json({ erro: "Envio de email não configurado" }, 503);
+  const licenca = await obterLicencaPorChave(c.env.DB, pedido.chave);
+  if (!licenca || licenca.revogada) return c.json({ erro: "Licença desconhecida" }, 403);
+
+  const db = c.env.DB;
+  const desde = new Date(Date.now() - 20 * 3_600_000).toISOString();
+  const para = await hashEmail(pedido.para);
+  const [porLicenca, porDestinatario] = await Promise.all([
+    db.prepare("SELECT COUNT(*) AS n FROM envios_email WHERE licenca_id = ? AND enviado_em > ? AND tipo = 'avisos'").bind(licenca.id, desde).first<number>("n"),
+    db.prepare("SELECT COUNT(*) AS n FROM envios_email WHERE para_hash = ? AND enviado_em > ? AND tipo = 'avisos'").bind(para, desde).first<number>("n"),
+  ]);
+  if ((porLicenca ?? 0) >= LIMITE_AVISOS_POR_LICENCA_DIA || (porDestinatario ?? 0) >= LIMITE_AVISOS_POR_DESTINATARIO_DIA) {
+    return c.json({ erro: "Aviso já enviado hoje" }, 429);
+  }
+  const painel = linkPainel(pedido.painel, licenca.url_instalacao, c.env.URL_PUBLICO);
+  try {
+    await enviarEmail(cfg, { para: pedido.para, ...emailAvisos(pedido.itens, painel) });
+  } catch (e) {
+    console.error("Envio do aviso diário falhou", e);
+    return c.json({ erro: "O envio do email falhou" }, 502);
+  }
+  await db.prepare("INSERT INTO envios_email (licenca_id, para_hash, enviado_em, tipo) VALUES (?, ?, ?, 'avisos')")
     .bind(licenca.id, para, new Date().toISOString())
     .run();
   return c.json({ ok: true }, 202);

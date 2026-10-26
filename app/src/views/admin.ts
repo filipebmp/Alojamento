@@ -566,6 +566,18 @@ export function paginaConta(u: Utilizador, codigos: number | null, opcoes: { err
         <button type="submit">Guardar</button>
       </form>
     </section>
+    ${u.papel === "gestor"
+      ? html`<section class="cartao">
+          <h2>Aviso por email</h2>
+          <form method="post" action="/admin/conta/avisos">
+            <label class="opcao"><input type="checkbox" name="avisos" value="1"${u.avisos_email ? " checked" : ""}>
+              Receber de manhã um email com as tarefas com prazo a terminar (atrasadas, hoje e amanhã)</label>
+            <p class="nota">Por exemplo: check-ins por preencher, comunicações ao SIBA, faturas, taxa turística e INE.
+              O email só diz o tipo e a quantidade das tarefas, sem nomes de hóspedes, e só é enviado quando há alguma.</p>
+            <button type="submit" class="secundario">Guardar</button>
+          </form>
+        </section>`
+      : ""}
     <section class="cartao">
       <h2>Palavra-passe</h2>
       <form method="post" action="/admin/conta/senha">

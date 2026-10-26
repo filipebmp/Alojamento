@@ -30,10 +30,11 @@ import {
   consultarLicenca,
   dataBloqueio,
   haProblema,
+  pedirEmailAvisos,
   pedirEmailRecuperacao,
   reservasBloqueadas,
 } from "./lib/licenca";
-import { estadoCodigo, mesesAteAnterior, ordenarPendentes, pendentesReserva, pendentesTmt } from "./lib/regras";
+import { type Pendente, estadoCodigo, mesesAteAnterior, ordenarPendentes, pendentesReserva, pendentesTmt } from "./lib/regras";
 import { SENHA_MINIMA, iguais, verificarSenha } from "../../comum/senha";
 import { calcularTmt, cobraTmt } from "./lib/tmt";
 import type { Alojamento, DeclaracaoTmt, Reserva } from "./lib/tipos";
@@ -84,6 +85,7 @@ import { paisValido } from "./lib/paises";
 import { MODALIDADES, TIPOLOGIAS, csvIne, relatorioIne } from "./lib/ine";
 import { capacidadeIne, paginaIne } from "./views/ine";
 import { paginaAjuda } from "./views/ajuda";
+import { horaLisboa, itensAviso } from "./lib/avisos";
 import { nomeMes } from "./views/layout";
 import { type ConfigSiba, validarConfigSiba } from "./lib/siba";
 import { enviarPendentesSiba, enviarReservaSiba, lerConfigSiba } from "./lib/siba-envio";
@@ -360,20 +362,17 @@ function alojamentoDa(mapa: MapaAlojamentos, rc: ReservaCompleta): Alojamento {
   return a;
 }
 
-app.get("/admin", async (c) => {
-  const agora = new Date();
-  const [{ reservas, alojamentos, mapa, declaracoes }, licenca] = await Promise.all([carregarTudo(c.env.DB), lerLicenca(c.env.DB)]);
-  const p = papel(c);
-  if (!alojamentos.length) return p === "gestor" ? c.redirect("/admin/alojamentos/novo") : c.html(paginaSemAcesso());
-  const todos = [
+// Tudo o que tem de ser tratado (ecrã Hoje e aviso diário por email).
+async function pendentesInstalacao(db: D1Database, d: Awaited<ReturnType<typeof carregarTudo>>, agora: Date): Promise<Pendente[]> {
+  const { reservas, alojamentos, mapa, declaracoes } = d;
+  const todos: Pendente[] = [
     ...reservas.flatMap((rc) => pendentesReserva(rc.reserva, rc.hospedes, rc.faturacao, configAlojamento(alojamentoDa(mapa, rc)), agora)),
     ...alojamentos.flatMap((a) =>
       pendentesTmt(mesesTmt(reservas, a.id, agora), declaracoes, { id: a.id, concelho: a.concelho, regras: regrasTmt(a) }),
     ),
   ];
-  // A equipa só vê o que depende dela: formulários e dados de hóspedes por preencher.
   // Emails de reserva que precisam do gestor (por associar, ou confirmação do reencaminhamento do Gmail).
-  const porTratar = await c.env.DB.prepare("SELECT estado, COUNT(*) AS n FROM emails_recebidos WHERE estado IN ('por_associar', 'confirmacao') GROUP BY estado")
+  const porTratar = await db.prepare("SELECT estado, COUNT(*) AS n FROM emails_recebidos WHERE estado IN ('por_associar', 'confirmacao') GROUP BY estado")
     .all<{ estado: string; n: number }>();
   for (const e of porTratar.results) {
     todos.push({
@@ -385,7 +384,7 @@ app.get("/admin", async (c) => {
   }
   // INE: o mês anterior responde-se até dia 10 (só nos alojamentos marcados).
   const mesAnterior = mesesIne(agora)[1];
-  const respostasIne = await c.env.DB.prepare("SELECT alojamento_id FROM ine_respostas WHERE mes = ?").bind(mesAnterior).all<{ alojamento_id: number }>();
+  const respostasIne = await db.prepare("SELECT alojamento_id FROM ine_respostas WHERE mes = ?").bind(mesAnterior).all<{ alojamento_id: number }>();
   for (const a of alojamentos.filter((x) => x.ativo && x.ine_responde && !respostasIne.results.some((r) => r.alojamento_id === x.id))) {
     todos.push({
       tipo: "ine",
@@ -395,6 +394,16 @@ app.get("/admin", async (c) => {
       link: `/admin/ine?mes=${mesAnterior}`,
     });
   }
+  return todos;
+}
+
+app.get("/admin", async (c) => {
+  const agora = new Date();
+  const [{ reservas, alojamentos, mapa, declaracoes }, licenca] = await Promise.all([carregarTudo(c.env.DB), lerLicenca(c.env.DB)]);
+  const p = papel(c);
+  if (!alojamentos.length) return p === "gestor" ? c.redirect("/admin/alojamentos/novo") : c.html(paginaSemAcesso());
+  const todos = await pendentesInstalacao(c.env.DB, { reservas, alojamentos, mapa, declaracoes }, agora);
+  // A equipa só vê o que depende dela: formulários e dados de hóspedes por preencher.
   const pendentes = p === "gestor" ? todos : todos.filter((x) => ["completar", "formulario", "dados_hospedes"].includes(x.tipo));
   const avisoBase = p === "gestor" ? avisoLicenca(licenca.chave, licenca.estado, alojamentos.filter((a) => a.ativo).length, agora) : null;
   const aviso = avisoBase && licenca.problemaDesde
@@ -1140,6 +1149,12 @@ app.get("/admin/conta", (c) => {
   return mostrarConta(c, { ok });
 });
 
+app.post("/admin/conta/avisos", async (c) => {
+  const b = await c.req.parseBody<Record<string, string>>();
+  await c.env.DB.prepare("UPDATE utilizadores SET avisos_email = ? WHERE id = ?").bind(b.avisos === "1" ? 1 : 0, c.get("utilizador").id).run();
+  return c.redirect("/admin/conta?guardado=1");
+});
+
 app.post("/admin/conta/dados", async (c) => {
   const u = c.get("utilizador");
   const b = await c.req.parseBody<Record<string, string>>();
@@ -1556,6 +1571,25 @@ function cents(v: string | undefined): number | null {
   return Number.isFinite(n) ? Math.round(n * 100) : null;
 }
 
+// Aviso diário por email (a partir das 8h de Lisboa, uma vez por dia) aos gestores que não o desligaram.
+async function enviarAvisosDiarios(env: Env, agora = new Date()): Promise<void> {
+  if (horaLisboa(agora) < 8) return;
+  const hoje = hojeLisboa(agora);
+  const chave = await lerDefinicao(env.DB, "licenca_chave");
+  if (!chave || (await lerDefinicao(env.DB, "avisos_dia")) === hoje) return;
+  await gravarDefinicao(env.DB, "avisos_dia", hoje);
+  const dados = await carregarTudo(env.DB);
+  const ativos = dados.alojamentos.filter((a) => a.ativo);
+  const itens = itensAviso(await pendentesInstalacao(env.DB, dados, agora), hoje, new Map(ativos.map((a) => [a.id, a.nome])));
+  if (!itens.length) return;
+  const gestores = (await env.DB.prepare("SELECT email FROM utilizadores WHERE papel = 'gestor' AND ativo = 1 AND avisos_email = 1 AND email IS NOT NULL")
+    .all<{ email: string }>()).results;
+  for (const g of gestores) {
+    await pedirEmailAvisos(env.URL_LICENCAS || URL_LICENCAS_PREDEFINIDO, { chave, para: g.email, painel: env.URL_PUBLICO ?? null, itens }, env.PLATAFORMA)
+      .catch((e) => console.error("Aviso diário", g.email, e));
+  }
+}
+
 export default {
   fetch: app.fetch,
   // De hora a hora: calendários; a licença (e a atualização automática) uma vez por dia.
@@ -1565,6 +1599,7 @@ export default {
       await sincronizarTodos(env.DB);
       await receberEmailsReservas(env);
       await enviarPendentesSiba(env.DB).catch((e) => console.error("SIBA", e));
+      await enviarAvisosDiarios(env).catch((e) => console.error("Avisos", e));
       const estado = await lerDefinicao(env.DB, "licenca_estado");
       const ultima = estado ? Date.parse((JSON.parse(estado) as EstadoGuardado).verificadoEm) : 0;
       if (Date.now() - ultima > 20 * 3_600_000 || (await lerDefinicao(env.DB, "licenca_erro"))) await verificarLicenca(env);

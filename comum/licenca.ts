@@ -69,3 +69,42 @@ export interface EmailReservaEntregue {
   recebidoEm: string;
   dados: unknown; // DadosEmailReserva (plataforma/src/emails-reservas.ts)
 }
+
+// ---------- Aviso diário por email ao gestor (tarefas com prazo a terminar) ----------
+// Só seguem tipos e quantidades, nunca nomes de hóspedes: a plataforma escreve o texto do email.
+
+export const CAMINHO_API_EMAIL_AVISOS = "/api/v1/email/avisos";
+
+export const TIPOS_AVISO = ["formulario", "dados_hospedes", "completar", "siba", "fatura", "tmt_declarar", "tmt_pagar", "ine"] as const;
+export type TipoAviso = (typeof TIPOS_AVISO)[number];
+export type PrazoAviso = "atrasado" | "hoje" | "amanha";
+
+export interface ItemAviso {
+  tipo: TipoAviso;
+  prazo: PrazoAviso;
+  quantidade: number;
+  alojamento: string | null; // nome do alojamento (com mais de um)
+}
+
+export interface PedidoEmailAvisos {
+  chave: string;
+  para: string;
+  painel: string | null; // endereço do painel, para o botão do email
+  itens: ItemAviso[];
+}
+
+export function pedidoAvisosValido(p: unknown): p is PedidoEmailAvisos {
+  const x = p as PedidoEmailAvisos;
+  return (
+    typeof x === "object" && x !== null &&
+    typeof x.chave === "string" && /^[A-Za-z0-9-]{8,64}$/.test(x.chave) &&
+    typeof x.para === "string" && x.para.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(x.para) &&
+    (x.painel === null || (typeof x.painel === "string" && x.painel.length <= 200)) &&
+    Array.isArray(x.itens) && x.itens.length > 0 && x.itens.length <= 50 &&
+    x.itens.every((i) =>
+      (TIPOS_AVISO as readonly string[]).includes(i?.tipo) &&
+      ["atrasado", "hoje", "amanha"].includes(i.prazo) &&
+      Number.isInteger(i.quantidade) && i.quantidade > 0 && i.quantidade <= 1000 &&
+      (i.alojamento === null || (typeof i.alojamento === "string" && i.alojamento.length <= 60)))
+  );
+}

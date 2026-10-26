@@ -98,3 +98,54 @@ export function emailEnderecos(urls: string[]) {
 <p style="color:#5d6964">Guarde o endereço nos favoritos ou no ecrã principal do telemóvel.</p>`,
   };
 }
+
+// Aviso diário ao gestor: tarefas com prazo a terminar (só tipos e quantidades, sem dados de hóspedes).
+const TEXTOS_AVISO: Record<string, [string, string]> = {
+  formulario: ["formulário de check-in por preencher (lembre o hóspede: os dados são precisos para o SIBA)", "formulários de check-in por preencher (lembre os hóspedes: os dados são precisos para o SIBA)"],
+  dados_hospedes: ["reserva com dados de hóspedes em falta", "reservas com dados de hóspedes em falta"],
+  completar: ["reserva importada por completar (nome e n.º de hóspedes)", "reservas importadas por completar (nome e n.º de hóspedes)"],
+  siba: ["comunicação ao SIBA", "comunicações ao SIBA"],
+  fatura: ["fatura-recibo por emitir", "faturas-recibo por emitir"],
+  tmt_declarar: ["declaração da taxa turística", "declarações da taxa turística"],
+  tmt_pagar: ["pagamento da taxa turística", "pagamentos da taxa turística"],
+  ine: ["resposta ao inquérito do INE", "respostas ao inquérito do INE"],
+};
+
+const PRAZOS_AVISO: [string, string][] = [["atrasado", "Atrasado"], ["hoje", "Termina hoje"], ["amanha", "Termina amanhã"]];
+
+export function emailAvisos(itens: { tipo: string; prazo: string; quantidade: number; alojamento: string | null }[], painel: string) {
+  const linha = (i: (typeof itens)[number]) =>
+    `${i.quantidade} ${TEXTOS_AVISO[i.tipo]?.[i.quantidade === 1 ? 0 : 1] ?? i.tipo}${i.alojamento ? ` — ${i.alojamento}` : ""}`;
+  const grupos = PRAZOS_AVISO.map(([p, titulo]) => ({ titulo, linhas: itens.filter((i) => i.prazo === p).map(linha) })).filter((g) => g.linhas.length);
+  const total = itens.reduce((s, i) => s + i.quantidade, 0);
+  const texto =
+    `Bom dia! Tem ${total} ${total === 1 ? "tarefa" : "tarefas"} com prazo a terminar no bookgest:\n\n` +
+    grupos.map((g) => `${g.titulo}:\n${g.linhas.map((l) => `- ${l}`).join("\n")}`).join("\n\n") +
+    `\n\nAbrir o bookgest: ${painel}\n\nPode desligar este aviso em A minha conta.`;
+  const html = `<p>Bom dia! Tem <strong>${total} ${total === 1 ? "tarefa" : "tarefas"}</strong> com prazo a terminar no bookgest:</p>
+${grupos.map((g) => `<p style="margin:16px 0 4px;font-weight:600">${escapar(g.titulo)}</p><ul style="margin:0;padding-left:20px">${g.linhas.map((l) => `<li>${escapar(l)}</li>`).join("")}</ul>`).join("")}
+<p style="margin-top:20px"><a href="${escapar(painel)}" style="display:inline-block;padding:10px 16px;background:#0f5c4d;color:#fff;border-radius:8px;text-decoration:none;font-weight:600">Abrir o bookgest</a></p>
+<p style="color:#5d6964">Pode desligar este aviso em A minha conta.</p>`;
+  const assunto = itens.some((i) => i.prazo === "atrasado")
+    ? `bookgest: ${total} ${total === 1 ? "tarefa" : "tarefas"} com prazo — há atrasos`
+    : `bookgest: ${total} ${total === 1 ? "tarefa" : "tarefas"} com prazo a terminar`;
+  return { assunto, texto, html };
+}
+
+// Só a instalação registada na licença, ou um endereço *.bookgest.pt; senão, a página de entrada do site.
+export function linkPainel(pedido: string | null, instalacao: string | null, site: string | undefined): string {
+  const anfitriao = (u: string | null) => {
+    try {
+      return u ? new URL(u) : null;
+    } catch {
+      return null;
+    }
+  };
+  const p = anfitriao(pedido);
+  const i = anfitriao(instalacao);
+  if (p && p.protocol === "https:" && (p.hostname === i?.hostname || p.hostname === "bookgest.pt" || p.hostname.endsWith(".bookgest.pt"))) {
+    return `${p.origin}/admin`;
+  }
+  if (i && i.protocol === "https:") return `${i.origin}/admin`;
+  return `${(site ?? "https://bookgest.pt").replace(/\/$/, "")}/entrar`;
+}

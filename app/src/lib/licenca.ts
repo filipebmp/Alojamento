@@ -1,6 +1,8 @@
 import {
+  CAMINHO_API_EMAIL_AVISOS,
   CAMINHO_API_EMAIL_RECUPERACAO,
   CAMINHO_API_LICENCA,
+  type PedidoEmailAvisos,
   type PedidoEmailRecuperacao,
   type PedidoLicenca,
   type RespostaLicenca,
@@ -81,4 +83,17 @@ export function reservasBloqueadas(problemaDesde: string | null, agora: Date): b
 
 export function haProblema(r: Pick<RespostaLicenca, "estado" | "alojamentosPagos">, ativos: number): boolean {
   return r.estado !== "ativa" || ativos > r.alojamentosPagos;
+}
+
+export async function pedirEmailAvisos(urlBase: string, pedido: PedidoEmailAvisos, servico?: Fetcher): Promise<void> {
+  const pedidoHttp = new Request(new URL(CAMINHO_API_EMAIL_AVISOS, urlBase), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(pedido),
+  });
+  const res = await (servico ? servico.fetch(pedidoHttp) : fetch(pedidoHttp));
+  if (!res.ok) {
+    const { erro } = await res.json<{ erro?: string }>().catch(() => ({ erro: undefined }));
+    throw new Error(erro ?? `A plataforma respondeu ${res.status}`);
+  }
 }

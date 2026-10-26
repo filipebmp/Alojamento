@@ -28,6 +28,9 @@ const SECCOES: Seccao[] = [
         <li>Em cada reserva, envie o link de check-in ao hóspede. O resto o bookgest vai lembrando no ecrã <strong>Hoje</strong>.</li></ol>`],
       ["Como ponho o bookgest no ecrã principal do telemóvel?", html`<p>Abra o painel no navegador e escolha <strong>Partilhar → Adicionar ao ecrã principal</strong> (iPhone, Safari)
         ou <strong>⋮ → Instalar aplicação / Adicionar ao ecrã principal</strong> (Android, Chrome). Passa a abrir como uma app, sem barra do navegador.</p>`],
+      ["Recebo avisos por email?", html`<p>Sim. Todas as manhãs, se houver tarefas com prazo atrasado, a terminar hoje ou amanhã (check-ins por preencher,
+        SIBA, faturas, taxa turística, INE), os gestores recebem um email com o resumo e um botão para abrir o bookgest. O email só diz o tipo e a quantidade
+        das tarefas, sem nomes de hóspedes. Pode desligá-lo em <a href="/admin/conta">A minha conta</a>.</p>`],
       ["O que é o ecrã Hoje?", html`<p>É o resumo do dia: entradas e saídas de hoje, ocupação e receita do mês, e a lista <strong>A tratar</strong>,
         com tudo o que tem prazo (formulários por preencher, SIBA, faturas, taxa turística, INE). As etiquetas dizem o prazo:
         <strong>Atrasado</strong> (vermelho), <strong>Hoje</strong> (laranja) ou a data limite. Com vários alojamentos, pode filtrar por alojamento no topo.</p>`],
