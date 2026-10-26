@@ -44,7 +44,7 @@ export function pagina(
   ${opcoes.descricao ? html`<meta name="description" content="${opcoes.descricao}">` : ""}
   ${opcoes.gestao ? html`<meta name="robots" content="noindex">` : ""}
   <link rel="icon" href="/icon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="/site.css?v=4">
+  <link rel="stylesheet" href="/site.css?v=5">
 </head>
 <body>
   <header class="topo"><div class="topo-dentro">
