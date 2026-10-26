@@ -596,21 +596,29 @@ async function atualizarAlojadas(env: Env): Promise<void> {
   // Instalações criadas antes do domínio próprio passam para <nome>.<domínio> (também nesta tarefa horária).
   const semDominio = (l: Licenca) => !!env.DOMINIO_ALOJADAS && !l.url_instalacao?.endsWith(`.${env.DOMINIO_ALOJADAS}`);
   for (const l of alojadas.filter((x) => precisaAtualizar(x.versao_publicada, v.versao) || semDominio(x)).slice(0, ALOJADAS_POR_EXECUCAO)) {
-    try {
-      if (precisaAtualizar(l.versao_publicada, v.versao)) {
-        await atualizarAlojada(env.CF_API_TOKEN!, env.CF_CONTA!, nomeAlojado(l.slug!), l.cf_base!, v, env.CF_API_URL || undefined);
-      }
-      if (semDominio(l)) {
-        const d = (await dominioAlojada(env, l.slug!))!;
-        await mudarParaDominio(env.CF_API_TOKEN!, env.CF_CONTA!, nomeAlojado(l.slug!), v,
-          { ...d, urlLicencas: env.URL_PUBLICO || `https://${env.DOMINIO_ALOJADAS}` }, env.CF_API_URL || undefined);
-        await env.DB.prepare("UPDATE licencas SET url_instalacao = ? WHERE id = ?").bind(`https://${d.hostname}`, l.id).run();
-      }
-      await env.DB.prepare("UPDATE licencas SET versao_publicada = ?, erro_atualizacao = NULL WHERE id = ?").bind(v.versao, l.id).run();
-    } catch (e) {
-      console.error(`Atualização de ${l.slug} falhou`, e);
-      await env.DB.prepare("UPDATE licencas SET erro_atualizacao = ? WHERE id = ?").bind(String(e).slice(0, 300), l.id).run();
+    await atualizarUmaAlojada(env, l, v, semDominio(l));
+  }
+}
+
+// Devolve a mensagem de erro (também guardada em erro_atualizacao) ou null se correu bem.
+async function atualizarUmaAlojada(env: Env, l: Licenca, v: Versao, semDominio: boolean, forcar = false): Promise<string | null> {
+  try {
+    if (forcar || precisaAtualizar(l.versao_publicada, v.versao)) {
+      await atualizarAlojada(env.CF_API_TOKEN!, env.CF_CONTA!, nomeAlojado(l.slug!), l.cf_base!, v, env.CF_API_URL || undefined);
     }
+    if (semDominio) {
+      const d = (await dominioAlojada(env, l.slug!))!;
+      await mudarParaDominio(env.CF_API_TOKEN!, env.CF_CONTA!, nomeAlojado(l.slug!), v,
+        { ...d, urlLicencas: env.URL_PUBLICO || `https://${env.DOMINIO_ALOJADAS}` }, env.CF_API_URL || undefined);
+      await env.DB.prepare("UPDATE licencas SET url_instalacao = ? WHERE id = ?").bind(`https://${d.hostname}`, l.id).run();
+    }
+    await env.DB.prepare("UPDATE licencas SET versao_publicada = ?, erro_atualizacao = NULL WHERE id = ?").bind(v.versao, l.id).run();
+    return null;
+  } catch (e) {
+    console.error(`Atualização de ${l.slug} falhou`, e);
+    const erro = String(e).slice(0, 300);
+    await env.DB.prepare("UPDATE licencas SET erro_atualizacao = ? WHERE id = ?").bind(erro, l.id).run();
+    return erro;
   }
 }
 
@@ -854,6 +862,19 @@ app.post("/gestao/licencas/:id/alojamentos", async (c) => {
     .bind(n, new Date().toISOString(), Number(c.req.param("id")))
     .run();
   return c.redirect("/gestao");
+});
+
+// Atualiza já uma instalação alojada para a versão mais recente (sem esperar pela tarefa de hora a hora).
+app.post("/gestao/licencas/:id/atualizar", async (c) => {
+  const l = await c.env.DB.prepare("SELECT * FROM licencas WHERE id = ? AND modo = 'alojado' AND slug IS NOT NULL AND cf_base IS NOT NULL")
+    .bind(Number(c.req.param("id"))).first<Licenca>();
+  const v = await versaoParaInstalar(c.env.DB);
+  if (!l || !v || !alojamentoDisponivel(c.env)) return c.redirect(`/gestao?erro=${encodeURIComponent("Esta instalação não pode ser atualizada daqui.")}`);
+  const semDominio = !!c.env.DOMINIO_ALOJADAS && !l.url_instalacao?.endsWith(`.${c.env.DOMINIO_ALOJADAS}`);
+  const erro = await atualizarUmaAlojada(c.env, l, v, semDominio, true);
+  return c.redirect(erro
+    ? `/gestao?erro=${encodeURIComponent(`Atualização de ${l.slug} falhou: ${erro}`)}`
+    : `/gestao?ok=${encodeURIComponent(`${l.slug} atualizada para a versão ${v.versao}.`)}`);
 });
 
 app.post("/gestao/licencas/:id/:acao{revogar|reativar}", async (c) => {

@@ -310,7 +310,9 @@ export function paginaLicencas(
                 <button class="pequeno">Alterar</button></form>`
             : l.alojamentos_pagos}</td>
           <td class="${excede ? "erro" : ""}">${l.alojamentos_ativos ?? "—"}</td>
-          <td>${l.versao ?? "—"}</td>
+          <td>${l.versao ?? "—"}${l.modo === "alojado" && l.slug && l.cf_base
+            ? html`<form method="post" action="/gestao/licencas/${l.id}/atualizar"><button class="pequeno">Atualizar agora</button></form>`
+            : ""}</td>
           <td>${dataPt(l.ultima_comunicacao)}</td>
           <td>${l.tipo === "cortesia"
             ? html`${c?.email && !l.revogada
