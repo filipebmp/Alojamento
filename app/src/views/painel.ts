@@ -3,20 +3,28 @@
 import { html, raw } from "hono/html";
 import type { ReservaCompleta } from "../db";
 import { diferencaDias, somarDias } from "../lib/datas";
+import { NOMES_PLATAFORMAS, PLATAFORMAS, type Plataforma } from "../lib/ical";
 import type { Barra, NumerosHoje } from "../lib/painel";
 import { type Pendente, euros } from "../lib/regras";
 import type { Alojamento, Reserva } from "../lib/tipos";
 import type { Papel } from "../lib/utilizadores";
 import { ITENS_MAIS, type NomeIcone, dataExtenso, dataPt, diaSemana, icone, mesCurto, pagina } from "./layout";
 
-export type Origem = "booking" | "airbnb" | "direta" | "outra";
+export type Origem = Plataforma | "direta";
 
 // "manual" = reserva direta (criada no bookgest sem plataforma).
 export function origemReserva(r: Pick<Reserva, "origem" | "ref_booking">): Origem {
-  return r.origem === "booking" || r.origem === "airbnb" || r.origem === "outra" ? r.origem : "direta";
+  return (PLATAFORMAS as readonly string[]).includes(r.origem) ? (r.origem as Plataforma) : "direta";
 }
 
-const NOMES_ORIGEM: Record<Origem, string> = { booking: "Booking", airbnb: "Airbnb", direta: "Direta", outra: "Outra" };
+const NOMES_ORIGEM: Record<Origem, string> = { ...NOMES_PLATAFORMAS, direta: "Direta" };
+
+// Legenda das cores do calendário: Booking, Airbnb e Direta sempre; as outras plataformas só se aparecerem.
+function legenda(presentes: Origem[]) {
+  const mostrar = (["booking", "airbnb", "direta", ...PLATAFORMAS.filter((p) => p !== "booking" && p !== "airbnb")] as Origem[])
+    .filter((o) => o === "booking" || o === "airbnb" || o === "direta" || presentes.includes(o));
+  return mostrar.map((o) => html`<span><i class="${o}"></i>${NOMES_ORIGEM[o]}</span>`);
+}
 
 export const chipOrigem = (r: Pick<Reserva, "origem" | "ref_booking">) => {
   const o = origemReserva(r);
@@ -218,10 +226,10 @@ export function paginaCalendario(o: { inicio: string; dias: number; hoje: string
             <h3>${a.nome}</h3>
             <div class="cal-pista" style="--linhas: ${Math.max(1, ...barras.map((b) => b.linha + 1))}">${barras.map(barra)}</div>
           </div>`)}
-          <div class="legenda"><span><i class="booking"></i>Booking</span><span><i class="airbnb"></i>Airbnb</span><span><i></i>Direta</span><span><i class="outra"></i>Outra</span></div>
+          <div class="legenda">${legenda(o.linhas.flatMap((l) => l.barras.map((b) => origemReserva(b.reserva))))}</div>
         </div>`
       : html`<p class="vazio">Sem alojamentos ativos.</p>`}
-    <p class="nota">As reservas do Booking e do Airbnb entram sozinhas quando o calendário (iCal) está ligado em
+    <p class="nota">As reservas do Booking, do Airbnb, do Vrbo e das outras plataformas entram sozinhas quando o calendário (iCal) está ligado em
       ${o.papel === "gestor" ? html`<a href="/admin/alojamentos">Alojamentos</a>` : "Alojamentos"}.</p>
   `, { admin: menuDoPapel(o.papel), seccao: "calendario", botaoNovo: true });
 }

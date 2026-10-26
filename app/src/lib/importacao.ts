@@ -5,7 +5,7 @@
 
 import { gerarToken } from "../db";
 import { hojeLisboa } from "./datas";
-import { type Plataforma, eReserva, lerCalendario, referencia } from "./ical";
+import { NOMES_PLATAFORMAS, type Plataforma, eReserva, lerCalendario, referencia } from "./ical";
 import type { Reserva } from "./tipos";
 
 export interface Calendario {
@@ -17,7 +17,7 @@ export interface Calendario {
   erro: string | null;
 }
 
-export const NOMES_PLATAFORMA: Record<Plataforma, string> = { booking: "Booking", airbnb: "Airbnb", outra: "outra plataforma" };
+export const NOMES_PLATAFORMA: Record<Plataforma, string> = { ...NOMES_PLATAFORMAS, outra: "outra plataforma" };
 
 const TAMANHO_MAXIMO = 2_000_000;
 

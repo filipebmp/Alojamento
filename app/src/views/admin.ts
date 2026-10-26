@@ -8,6 +8,7 @@ import { SENHA_MINIMA } from "../../../comum/senha";
 import { calcularTmt, cobraTmt, descreverTmt, temEpocas } from "../lib/tmt";
 import type { Alojamento, DeclaracaoTmt, Passo } from "../lib/tipos";
 import { type Calendario, NOMES_PLATAFORMA } from "../lib/importacao";
+import { NOMES_PLATAFORMAS, PLATAFORMAS } from "../lib/ical";
 import type { EmailRecebido } from "../lib/emails";
 import type { DadosEmailReserva } from "../../../comum/emails";
 import { N_CODIGOS, type Papel, type Utilizador } from "../lib/utilizadores";
@@ -66,7 +67,10 @@ export function paginaNovaReserva(
 }
 
 // Origem guardada em reservas.origem ("manual" = reserva direta).
-export const ORIGENS: [string, string][] = [["booking", "Booking"], ["airbnb", "Airbnb"], ["manual", "Direta"], ["outra", "Outra"]];
+export const ORIGENS: [string, string][] = [
+  ...PLATAFORMAS.filter((p) => p !== "outra").map((p): [string, string] => [p, NOMES_PLATAFORMAS[p]]),
+  ["manual", "Direta"], ["outra", "Outra"],
+];
 
 const campoOrigem = (atual: string) => html`<label>Plataforma
   <select name="origem">${ORIGENS.map(([v, t]) => html`<option value="${v}"${v === atual ? " selected" : ""}>${t}</option>`)}</select></label>`;
@@ -900,7 +904,7 @@ function seccaoSiba(a: Alojamento, s: ConfigSiba | null, erro?: string) {
 
 function seccaoCalendarios(a: Alojamento, calendarios: Calendario[]) {
   return html`<section class="cartao" id="calendarios">
-    <h2>Importar reservas (Booking, Airbnb)</h2>
+    <h2>Importar reservas (Booking, Airbnb, Vrbo…)</h2>
     <p class="nota">As reservas entram sozinhas, de hora a hora, a partir do calendário de cada plataforma. O calendário só traz as
       datas: o nome e o n.º de hóspedes completam-se depois na reserva.</p>
     ${calendarios.length
@@ -915,13 +919,19 @@ function seccaoCalendarios(a: Alojamento, calendarios: Calendario[]) {
       : ""}
     <form method="post" action="/admin/alojamentos/${a.id}/calendarios">
       <label>Plataforma <select name="plataforma" required>
-        <option value="booking">Booking</option><option value="airbnb">Airbnb</option><option value="outra">Outra</option></select></label>
+        ${PLATAFORMAS.map((p) => html`<option value="${p}">${NOMES_PLATAFORMAS[p]}</option>`)}</select></label>
       <label>Link do calendário (iCal) <input name="url" required inputmode="url" placeholder="https://…"></label>
       <button type="submit">Adicionar</button>
     </form>
     <details><summary>Onde encontro o link?</summary>
       <p><strong>Booking:</strong> Extranet → Tarifas e disponibilidade → Sincronizar calendários → Exportar calendário → copiar o link.</p>
       <p><strong>Airbnb:</strong> Anúncios → o seu anúncio → Disponibilidade → Ligar calendários → Exportar calendário → copiar o link.</p>
+      <p><strong>Vrbo:</strong> Calendário → Importar e exportar → Exportar calendário. Desligue "Incluir pedidos de reserva provisórios"
+        para importar só as reservas confirmadas, e copie o link.</p>
+      <p><strong>Tripadvisor:</strong> no anúncio de arrendamento → Calendário → Sincronizar calendário (iCal) → Exportar → copiar o link.
+        O Tripadvisor tem vindo a deixar o arrendamento de férias: se o link deixar de funcionar, aparece aqui um erro.</p>
+      <p><strong>Rentalia:</strong> Área de proprietário → o seu alojamento → Calendário → Sincronizar calendários (iCal) → Exportar → copiar o link.</p>
+      <p><strong>Outra plataforma:</strong> qualquer calendário iCal (o link costuma acabar em <code>.ics</code>).</p>
     </details>
   </section>`;
 }

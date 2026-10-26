@@ -24,7 +24,7 @@ const SECCOES: Seccao[] = [
       ["Por onde começo?", html`<ol>
         <li>Em <a href="/admin/alojamentos">Alojamentos</a>, confirme os dados do alojamento: concelho (a taxa turística preenche-se sozinha), código do cofre, hora de check-in e regime de IVA.</li>
         <li>Em <strong>Instruções de chegada</strong> (dentro do alojamento), acrescente os passos com fotos para o hóspede chegar e abrir o cofre.</li>
-        <li>Ligue os calendários do Booking e do Airbnb (secção <strong>Importar reservas</strong> do alojamento) e, se quiser, os <a href="/admin/emails">emails de reserva</a>.</li>
+        <li>Ligue os calendários do Booking, do Airbnb, do Vrbo ou de outra plataforma (secção <strong>Importar reservas</strong> do alojamento) e, se quiser, os <a href="/admin/emails">emails de reserva</a>.</li>
         <li>Em cada reserva, envie o link de check-in ao hóspede. O resto o bookgest vai lembrando no ecrã <strong>Hoje</strong>.</li></ol>`],
       ["Como ponho o bookgest no ecrã principal do telemóvel?", html`<p>Abra o painel no navegador e escolha <strong>Partilhar → Adicionar ao ecrã principal</strong> (iPhone, Safari)
         ou <strong>⋮ → Instalar aplicação / Adicionar ao ecrã principal</strong> (Android, Chrome). Passa a abrir como uma app, sem barra do navegador.</p>`],
@@ -41,9 +41,9 @@ const SECCOES: Seccao[] = [
     titulo: "Reservas e calendário",
     icone: "reservas",
     perguntas: [
-      ["Como crio uma reserva?", html`<p>No botão <strong>+</strong> (ou <strong>Nova reserva</strong>), escolha a plataforma (Booking, Airbnb, Direta ou Outra), o nome do titular,
+      ["Como crio uma reserva?", html`<p>No botão <strong>+</strong> (ou <strong>Nova reserva</strong>), escolha a plataforma (Booking, Airbnb, Vrbo, Tripadvisor, Rentalia, Direta ou Outra), o nome do titular,
         as datas e o n.º de hóspedes. O valor pago e a comissão podem ser preenchidos depois, em <strong>Valores</strong>, dentro da reserva.</p>`],
-      ["O que mostra o Calendário?", html`<p>Uma linha por alojamento com as reservas em barras com a cor da plataforma (azul Booking, rosa Airbnb, verde direta).
+      ["O que mostra o Calendário?", html`<p>Uma linha por alojamento com as reservas em barras com a cor da plataforma (azul Booking, rosa Airbnb, verde direta, e uma cor própria para o Vrbo, o Tripadvisor e a Rentalia).
         As barras às riscas são reservas importadas que ainda não têm nome nem n.º de hóspedes. Toque numa barra para abrir a reserva.
         No computador pode ver 2 ou 4 semanas.</p>`],
       ["O que é o Progresso de uma reserva?", html`<p>Os passos obrigatórios de cada estadia: <strong>dados dos hóspedes → SIBA → fatura-recibo → taxa turística</strong>.
@@ -121,10 +121,15 @@ const SECCOES: Seccao[] = [
         <li><strong>Concelho e taxa turística:</strong> escolha o concelho e os valores preenchem-se sozinhos (confirme no regulamento da câmara).</li>
         <li><strong>Capacidade e INE:</strong> modalidade, tipologia, camas e se responde ao inquérito do INE.</li>
         <li><strong>Faturação:</strong> regime de IVA.</li>
-        <li><strong>Importar reservas:</strong> links dos calendários do Booking e do Airbnb.</li>
+        <li><strong>Importar reservas:</strong> links dos calendários do Booking, do Airbnb, do Vrbo, do Tripadvisor, da Rentalia ou de outra plataforma.</li>
         <li><strong>SIBA:</strong> dados para o envio automático dos boletins.</li></ul>`],
       ["Onde encontro o link do calendário (iCal)?", html`<p><strong>Booking:</strong> Extranet → Tarifas e disponibilidade → Sincronizar calendários → Exportar calendário.
-        <strong>Airbnb:</strong> Anúncio → Disponibilidade → Sincronização de calendários → Exportar calendário. Cole o link no alojamento; as reservas entram de hora a hora.</p>`],
+        <strong>Airbnb:</strong> Anúncio → Disponibilidade → Sincronização de calendários → Exportar calendário.
+        <strong>Vrbo:</strong> Calendário → Importar e exportar → Exportar calendário (desligue os pedidos provisórios).
+        <strong>Tripadvisor:</strong> Calendário → Sincronizar calendário (iCal) → Exportar.
+        <strong>Rentalia:</strong> Área de proprietário → Calendário → Sincronizar calendários (iCal) → Exportar.
+        Cole o link no alojamento; as reservas entram de hora a hora.</p>
+        <p>O calendário só traz as datas. Os emails de reserva são lidos para o Booking e o Airbnb; nas outras plataformas, complete o nome e os hóspedes na reserva.</p>`],
       ["Arquivar ou apagar?", html`<p><strong>Arquivar</strong> esconde o alojamento das novas reservas e conserva tudo (as reservas e declarações têm de ser guardadas).
         <strong>Apagar</strong> só é possível em alojamentos sem reservas, por exemplo criados por engano ou para testar.</p>`],
       ["Porque não consigo acrescentar um alojamento?", html`<p>A licença inclui um número de alojamentos ativos. Para acrescentar, aumente-o em

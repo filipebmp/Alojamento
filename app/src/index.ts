@@ -20,7 +20,7 @@ import { configAlojamento, regrasTmt } from "./lib/concelhos";
 import { hojeLisboa, somarDias } from "./lib/datas";
 import { compararVersoes } from "../../comum/versoes";
 import { atualizar } from "./lib/atualizacao";
-import type { Plataforma } from "./lib/ical";
+import { PLATAFORMAS, type Plataforma } from "./lib/ical";
 import { listarCalendarios, sincronizarCalendario, sincronizarTodos } from "./lib/importacao";
 import { listarEmails, receberEmails } from "./lib/emails";
 import {
@@ -429,7 +429,7 @@ app.get("/admin", async (c) => {
   }));
 });
 
-const origemValida = (v: string | undefined) => (["booking", "airbnb", "manual", "outra"].includes(v ?? "") ? v! : "manual");
+const origemValida = (v: string | undefined) => ((PLATAFORMAS as readonly string[]).includes(v ?? "") ? v! : "manual");
 
 function filtroAlojamento(c: Ctx, ativos: Alojamento[]): number | null {
   const id = Number(c.req.query("alojamento"));
@@ -953,8 +953,6 @@ app.post("/admin/alojamentos/:id/apagar", async (c) => {
 });
 
 // ---------- Calendários (importação de reservas) ----------
-
-const PLATAFORMAS: Plataforma[] = ["booking", "airbnb", "outra"];
 
 app.post("/admin/alojamentos/:id/calendarios", async (c) => {
   const a = await obterAlojamento(c.env.DB, Number(c.req.param("id")));

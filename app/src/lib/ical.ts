@@ -41,7 +41,11 @@ export function lerCalendario(ics: string): EventoCalendario[] {
   return eventos;
 }
 
-export type Plataforma = "booking" | "airbnb" | "outra";
+export const PLATAFORMAS = ["booking", "airbnb", "vrbo", "tripadvisor", "rentalia", "outra"] as const;
+export type Plataforma = (typeof PLATAFORMAS)[number];
+export const NOMES_PLATAFORMAS: Record<Plataforma, string> = {
+  booking: "Booking", airbnb: "Airbnb", vrbo: "Vrbo", tripadvisor: "Tripadvisor", rentalia: "Rentalia", outra: "Outra",
+};
 
 // O Airbnb marca as reservas como "Reserved" e as datas bloqueadas como "Airbnb (Not available)".
 // O Booking marca tudo como "CLOSED - Not available": não distingue reservas de datas fechadas à mão.

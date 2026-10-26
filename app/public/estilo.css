@@ -5,6 +5,9 @@
   --booking: #2f6fd0; --booking-texto: #1b4fa0; --booking-suave: #e6eefa;
   --airbnb: #d9576a; --airbnb-texto: #a8323f; --airbnb-suave: #fbe9ec;
   --direta: #0f5c4d; --outra: #6b5bb5;
+  --vrbo: #3346b8; --vrbo-texto: #26368f; --vrbo-suave: #e8eafa;
+  --tripadvisor: #b07a00; --tripadvisor-texto: #855c00; --tripadvisor-suave: #f8efd9;
+  --rentalia: #e0622a; --rentalia-texto: #a8441a; --rentalia-suave: #fcebe2;
   --sombra: 0 1px 2px rgba(22, 32, 28, .04);
   --raio: 16px;
   color-scheme: light;
@@ -17,6 +20,9 @@
     --booking: #4a86e0; --booking-texto: #9cc0f5; --booking-suave: #1b2a42;
     --airbnb: #e0697b; --airbnb-texto: #f4a5b0; --airbnb-suave: #3d1f25;
     --direta: #2f9a83; --outra: #8a7bd0;
+    --vrbo: #6576e0; --vrbo-texto: #aab4f5; --vrbo-suave: #20254a;
+    --tripadvisor: #c99a2e; --tripadvisor-texto: #ecc874; --tripadvisor-suave: #3a2f14;
+    --rentalia: #ec7e4c; --rentalia-texto: #f6ad8a; --rentalia-suave: #40241a;
     --sombra: none;
     color-scheme: dark;
   }
@@ -142,6 +148,9 @@ a.item:hover { background: var(--neutro-suave); }
 .chip.booking { background: var(--booking-suave); color: var(--booking-texto); }
 .chip.airbnb { background: var(--airbnb-suave); color: var(--airbnb-texto); }
 .chip.direta { background: var(--marca-suave); color: var(--marca); }
+.chip.vrbo { background: var(--vrbo-suave); color: var(--vrbo-texto); }
+.chip.tripadvisor { background: var(--tripadvisor-suave); color: var(--tripadvisor-texto); }
+.chip.rentalia { background: var(--rentalia-suave); color: var(--rentalia-texto); }
 .etiqueta { margin-right: 6px; }
 
 /* ---------- Cabeçalho das páginas ---------- */
@@ -190,6 +199,9 @@ a.item:hover { background: var(--neutro-suave); }
 .cal-barra.booking { background: var(--booking); }
 .cal-barra.airbnb { background: var(--airbnb); }
 .cal-barra.outra { background: var(--outra); }
+.cal-barra.vrbo { background: var(--vrbo); }
+.cal-barra.tripadvisor { background: var(--tripadvisor); }
+.cal-barra.rentalia { background: var(--rentalia); }
 .cal-barra.incompleta { background-image: repeating-linear-gradient(135deg, rgba(255,255,255,.18) 0 6px, transparent 6px 12px); }
 .cal-barra.cortada-inicio { border-top-left-radius: 0; border-bottom-left-radius: 0; }
 .cal-barra.cortada-fim { border-top-right-radius: 0; border-bottom-right-radius: 0; }
@@ -199,6 +211,9 @@ a.item:hover { background: var(--neutro-suave); }
 .legenda i.booking { background: var(--booking); }
 .legenda i.airbnb { background: var(--airbnb); }
 .legenda i.outra { background: var(--outra); }
+.legenda i.vrbo { background: var(--vrbo); }
+.legenda i.tripadvisor { background: var(--tripadvisor); }
+.legenda i.rentalia { background: var(--rentalia); }
 .navegar { display: flex; gap: 6px; align-items: center; }
 .navegar a { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; height: 40px; padding: 0 10px; border-radius: 10px;
   border: 1px solid var(--campo); background: var(--cartao); color: var(--texto); text-decoration: none; font-size: .87rem; font-weight: 500; }

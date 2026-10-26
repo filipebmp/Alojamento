@@ -85,7 +85,7 @@ export interface DadosSite {
 const FUNCIONALIDADES: [Parameters<typeof icone>[0], string, string][] = [
   ["telemovel", "Check-in online", "O hóspede preenche os dados no telemóvel, em português ou inglês, antes de chegar. Envia o link por WhatsApp num toque."],
   ["chave", "Código das chaves no momento certo", "O código do cofre só aparece depois do formulário preenchido e perto da hora de entrada, com as suas fotos de como chegar."],
-  ["calendario", "Reservas do Booking e do Airbnb", "Ligue o calendário de cada plataforma e as reservas entram sozinhas, num calendário com todos os alojamentos."],
+  ["calendario", "Reservas do Booking, Airbnb, Vrbo…", "Ligue o calendário de cada plataforma e as reservas entram sozinhas, num calendário com todos os alojamentos."],
   ["email", "Emails de reserva", "Reencaminhe os emails de confirmação e o bookgest completa o nome, os hóspedes e os valores de cada reserva."],
   ["escudo", "Envio automático ao SIBA", "Assim que o check-in fica completo, os boletins dos hóspedes estrangeiros seguem para o webservice oficial do SIBA. Chegadas futuras seguem no dia do check-in; se algo falhar, vê o motivo e reenvia."],
   ["recibo", "Fatura-recibo e INE", "Emite a fatura no seu programa de faturação ou prepara-a para o Portal das Finanças. Relatório mensal do INE (hóspedes e dormidas por país) pronto a transcrever."],
@@ -108,7 +108,7 @@ const DETALHES: [Parameters<typeof icone>[0], string, string, string[]][] = [
   ["recibo", "Fatura-recibo",
     "Com o InvoiceXpress, o Vendus ou o TOConline ligados, a fatura-recibo de cada reserva é emitida com um clique, com o IVA certo e a taxa turística à parte. Sem programa de faturação, o bookgest prepara todos os campos para copiar para o Portal das Finanças, gratuito.",
     ["Dados de faturação pedidos ao hóspede no check-in", "IVA de 6%, 5% (Madeira), 4% (Açores) ou isenção do art. 53.º", "Prazo da fatura à vista em cada reserva"]],
-  ["calendario", "Reservas do Booking e do Airbnb",
+  ["calendario", "Reservas do Booking, Airbnb, Vrbo, Tripadvisor e Rentalia",
     "Ligue o calendário (iCal) de cada plataforma e as reservas entram sozinhas, num calendário com todos os alojamentos. Reencaminhe os emails de confirmação e o bookgest completa o nome, os hóspedes e os valores.",
     ["Sem reservas duplicadas nem esquecidas", "Avisa quando uma reserva desaparece do calendário (cancelamento)", "Reservas diretas criadas em segundos"]],
   ["chave", "Check-in online e código das chaves",
@@ -148,11 +148,11 @@ export function paginaInicio(d: DadosSite) {
       <div>
         <span class="selo">${icone("casa", 15)}Para quem gere um ou poucos Alojamentos Locais</span>
         <h1>O seu Alojamento Local em ordem, sem papelada.</h1>
-        <p class="lead">Check-in online, código das chaves, reservas do Booking e do Airbnb e todos os prazos legais —
+        <p class="lead">Check-in online, código das chaves, reservas do Booking, do Airbnb e do Vrbo e todos os prazos legais —
           SIBA, fatura e taxa turística — num só sítio, no telemóvel.</p>
         <div class="botoes">${comecar}<a class="botao grande secundario" href="#funcionalidades">Ver como funciona</a></div>
         ${d.registosAbertos ? html`<p class="nota">Sem cartão. Pronto a usar num minuto.</p>` : ""}
-        <p class="plataformas">Funciona com <b>Booking.com</b> · <b>Airbnb</b> · reservas diretas</p>
+        <p class="plataformas">Funciona com <b>Booking.com</b> · <b>Airbnb</b> · <b>Vrbo</b> · <b>Tripadvisor</b> · <b>Rentalia</b> · reservas diretas</p>
       </div>
       ${TELEMOVEL}
     </section>
@@ -179,7 +179,7 @@ export function paginaInicio(d: DadosSite) {
       <p class="lead">Sem instalar nada da loja de aplicações: abre no browser e fica no ecrã principal como uma app.</p>
       <ol class="passos">
         <li><h3>Crie o seu bookgest</h3><p>Escolha o endereço (ex.: casa-da-praia.bookgest.pt) e configure o alojamento, o código do cofre e as regras do concelho.</p></li>
-        <li><h3>Ligue as reservas</h3><p>Cole o link do calendário do Booking e do Airbnb e reencaminhe os emails de reserva. As reservas aparecem sozinhas.</p></li>
+        <li><h3>Ligue as reservas</h3><p>Cole o link do calendário de cada plataforma (Booking, Airbnb, Vrbo…) e reencaminhe os emails de reserva. As reservas aparecem sozinhas.</p></li>
         <li><h3>Envie o link ao hóspede</h3><p>O hóspede faz o check-in no telemóvel e recebe o código das chaves. O bookgest avisa-o do que falta tratar.</p></li>
       </ol>
     </section>
@@ -223,9 +223,9 @@ export function paginaInicio(d: DadosSite) {
       <h2>Perguntas frequentes</h2>
       <details><summary>Preciso de conhecimentos técnicos?</summary>
         <p>Não. No modo Simples basta registar-se. O modo Privado tem um instalador passo a passo (cerca de 10 minutos).</p></details>
-      <details><summary>Funciona com o Booking e o Airbnb?</summary>
-        <p>Sim. As reservas entram sozinhas pelo calendário (iCal) de cada plataforma, e os emails de reserva reencaminhados
-          completam o nome, os hóspedes e os valores. Também pode criar reservas à mão em segundos.</p></details>
+      <details><summary>Com que plataformas funciona?</summary>
+        <p>Booking, Airbnb, Vrbo, Tripadvisor, Rentalia e qualquer outra com calendário iCal. As reservas entram sozinhas pelo calendário de cada plataforma,
+          e no Booking e no Airbnb os emails de reserva reencaminhados completam o nome, os hóspedes e os valores. Também pode criar reservas à mão em segundos.</p></details>
       <details><summary>O bookgest comunica ao SIBA e emite as faturas por mim?</summary>
         <p>Ao SIBA, sim: com o alojamento registado no SIBA em modo webservice, os boletins seguem automaticamente.
           A fatura-recibo é emitida no seu programa de faturação (InvoiceXpress, Vendus ou TOConline) com um clique,
@@ -239,7 +239,7 @@ export function paginaInicio(d: DadosSite) {
     portal: d.portal,
     experimentar: d.registosAbertos,
     contacto: d.contacto,
-    descricao: "Check-in online, código das chaves, reservas do Booking e do Airbnb e prazos legais (SIBA, fatura, taxa turística) para pequenos gestores de Alojamento Local.",
+    descricao: "Check-in online, código das chaves, reservas do Booking, Airbnb e Vrbo e prazos legais (SIBA, fatura, taxa turística) para pequenos gestores de Alojamento Local.",
   });
 }
 
