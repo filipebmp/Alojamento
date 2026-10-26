@@ -62,7 +62,8 @@ câmara municipal (taxa turística, valores agregados), programa de faturação 
 5. **Acordo de tratamento de dados (art. 28.º):** aceite por clique no registo. Chega? Prazo de notificação de violações ao cliente
    (proposta: 48 h)? Prazo para apagar os dados no fim do contrato sem pedido (proposta: 90 dias)?
 6. **Subcontratantes nos EUA** (Cloudflare, Resend): confirmar que o EU-US Data Privacy Framework e/ou as cláusulas contratuais-tipo
-   dos DPA destes fornecedores chegam. Convém fixar as bases de dados na UE (Cloudflare D1, jurisdição "eu") para as novas instalações?
+   dos DPA destes fornecedores chegam. (Feito: desde 26/10/2026, as bases de dados das novas instalações são criadas com a jurisdição
+   "eu" da Cloudflare, que restringe a execução e o armazenamento à UE. As instalações anteriores não podem ser mudadas sem migração.)
 7. **Avaliação de impacto (AIPD/DPIA):** os documentos de identificação de hóspedes justificam uma AIPD (não há categorias especiais;
    volume pequeno por cliente, mas agregado na plataforma)?
 8. **Encarregado de proteção de dados (EPD/DPO):** é obrigatório? (À partida não: não é atividade principal de controlo sistemático em grande escala.)
@@ -74,7 +75,7 @@ câmara municipal (taxa turística, valores agregados), programa de faturação 
 
 ## 5. O que já está feito (técnico)
 
-- Base de dados separada por cliente; HTTPS em todo o lado; palavras-passe com hash; sessões com prazo; papéis gestor/equipa.
+- Base de dados separada por cliente, restrita à UE nas instalações criadas desde 26/10/2026; HTTPS em todo o lado; palavras-passe com hash; sessões com prazo; papéis gestor/equipa.
 - Links de check-in individuais e impossíveis de adivinhar; código das chaves só com check-in completo e perto da entrada.
 - Emails de reserva: só os dados extraídos, apagados da plataforma até 7 dias depois; o email não é guardado.
 - Avisos diários por email: só tipos e quantidades de tarefas, nunca dados de hóspedes.

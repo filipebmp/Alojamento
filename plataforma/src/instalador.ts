@@ -69,9 +69,10 @@ export async function instalar(token: string, d: OpcoesInstalacao): Promise<Resu
   const url = d.alojado?.dominio ? `https://${d.alojado.dominio.hostname}` : `https://${nome}.${subdominio}.workers.dev`;
 
   // Base de dados: reutiliza a existente numa reinstalação (os dados do gestor nunca são apagados).
+  // As novas ficam restritas à União Europeia (RGPD): a jurisdição só pode ser escolhida ao criar a base.
   const existentes = await cf.pedido<{ uuid: string; name: string }[]>("GET", `/accounts/${conta}/d1/database?name=${nome}`);
   const base = existentes.find((b) => b.name === nome)?.uuid
-    ?? (await cf.pedido<{ uuid: string }>("POST", `/accounts/${conta}/d1/database`, { name: nome })).uuid;
+    ?? (await cf.pedido<{ uuid: string }>("POST", `/accounts/${conta}/d1/database`, { name: nome, jurisdiction: "eu" })).uuid;
   await cf.aplicarMigracoes(conta, base, d.versao.migracoes);
 
   const bindings: Binding[] = [

@@ -210,7 +210,7 @@ export function paginaTratamentoDados(contacto: string | null) {
 // ---------- Subcontratantes ----------
 
 const SUBCONTRATANTES: [string, string, string, string][] = [
-  ["Cloudflare, Inc.", "EUA (dados na UE ou ao abrigo do DPF e das cláusulas contratuais-tipo)", "Alojamento do site, das instalações e das bases de dados; encaminhamento dos emails de reserva", "Dados dos clientes e dos hóspedes"],
+  ["Cloudflare, Inc.", "EUA; as bases de dados das instalações criadas desde 26/10/2026 ficam restritas à UE (as anteriores, ao abrigo do DPF e das cláusulas contratuais-tipo)", "Alojamento do site, das instalações e das bases de dados; encaminhamento dos emails de reserva", "Dados dos clientes e dos hóspedes"],
   ["Resend (Plus Five Five, Inc.)", "EUA (DPF / cláusulas contratuais-tipo)", "Envio de emails do serviço (registo, entrada, avisos diários)", "Nome e email dos clientes; os avisos têm só tipos e quantidades, sem dados de hóspedes"],
   ["Stripe Payments Europe, Ltd.", "Irlanda", "Pagamentos da subscrição (responsável independente pelos dados de pagamento)", "Dados de faturação e pagamento dos clientes"],
   ["InvoiceXpress (quando ativo)", "Portugal", "Emissão das faturas da subscrição", "Dados de faturação dos clientes"],
