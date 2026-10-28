@@ -118,7 +118,7 @@ export function paginaInstagram() {
   `, { gestao: true });
 }
 
-// Converte o SVG em PNG 1080×1080 e partilha (iPhone: "Guardar imagem") ou descarrega; copia textos.
+// Converte o SVG em PNG (1080×1350 nas publicações, 1080×1080 na fotografia de perfil) e partilha (iPhone: "Guardar imagem") ou descarrega; copia textos.
 const SCRIPT_INSTAGRAM = `
 document.addEventListener("click", async (e) => {
   const copiar = e.target.closest("[data-copiar]");
@@ -131,11 +131,12 @@ document.addEventListener("click", async (e) => {
   if (!guardar) return;
   const img = guardar.parentElement.querySelector("img");
   const canvas = document.createElement("canvas");
-  canvas.width = canvas.height = 1080;
+  canvas.width = img.naturalWidth || 1080;
+  canvas.height = img.naturalHeight || 1080;
   const fonte = new Image();
   fonte.src = img.src;
   await fonte.decode();
-  canvas.getContext("2d").drawImage(fonte, 0, 0, 1080, 1080);
+  canvas.getContext("2d").drawImage(fonte, 0, 0, canvas.width, canvas.height);
   const blob = await new Promise((r) => canvas.toBlob(r, "image/png"));
   const ficheiro = new File([blob], img.dataset.nome + ".png", { type: "image/png" });
   if (navigator.canShare && navigator.canShare({ files: [ficheiro] })) {

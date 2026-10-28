@@ -1,4 +1,4 @@
-// Plano de Instagram para promover o bookgest: perfil e publicações prontas (imagens 1080×1080 em SVG,
+// Plano de Instagram para promover o bookgest: perfil e publicações prontas (imagens verticais 1080×1350 em SVG,
 // convertidas em PNG no navegador, com legenda e hashtags).
 
 export type Estilo = "verde" | "claro" | "creme";
@@ -190,7 +190,13 @@ export const PUBLICACOES: Publicacao[] = [
   },
 ];
 
-// ---------- Imagens (SVG 1080×1080) ----------
+// ---------- Imagens (SVG 1080×1350) ----------
+// Formato vertical 4:5, o recomendado para o feed. A grelha do perfil mostra só o centro em 3:4 (corta ~34 px de
+// cada lado), por isso o texto fica a MARGEM das laterais.
+export const LARGURA = 1080;
+export const ALTURA = 1350;
+const MARGEM = 120;
+export const Y_RODAPE = 1240;
 
 const CORES: Record<Estilo, { fundo: string; texto: string; suave: string; destaque: string; logo: string; logoIcone: string }> = {
   verde: { fundo: "#0f5c4d", texto: "#ffffff", suave: "#cfe6df", destaque: "#9fe0cd", logo: "#ffffff", logoIcone: "#0f5c4d" },
@@ -220,43 +226,43 @@ const CASA = '<path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/>';
 export function svgDiapositivo(d: Diapositivo, n = 1, total = 1): string {
   const c = CORES[d.estilo];
   const partes: string[] = [];
-  let y = d.lista ? 270 : 380;
+  let y = d.lista ? 380 : 480;
   if (d.sobre) {
-    partes.push(`<text x="96" y="${y}" font-size="34" font-weight="700" letter-spacing="3" fill="${c.destaque}">${xml(d.sobre.toUpperCase())}</text>`);
+    partes.push(`<text x="${MARGEM}" y="${y}" font-size="34" font-weight="700" letter-spacing="3" fill="${c.destaque}">${xml(d.sobre.toUpperCase())}</text>`);
     y += d.lista ? 74 : 86;
   }
   const tamanhoTitulo = d.lista ? 64 : d.titulo.length > 44 ? 72 : 84;
-  for (const l of quebrar(d.titulo, Math.floor(1650 / tamanhoTitulo))) {
-    partes.push(`<text x="96" y="${y}" font-size="${tamanhoTitulo}" font-weight="800" letter-spacing="-2" fill="${c.texto}">${xml(l)}</text>`);
+  for (const l of quebrar(d.titulo, Math.floor(1560 / tamanhoTitulo))) {
+    partes.push(`<text x="${MARGEM}" y="${y}" font-size="${tamanhoTitulo}" font-weight="800" letter-spacing="-2" fill="${c.texto}">${xml(l)}</text>`);
     y += Math.round(tamanhoTitulo * 1.14);
   }
   if (d.texto) {
     y += 34;
-    for (const l of quebrar(d.texto, 40)) {
-      partes.push(`<text x="96" y="${y}" font-size="40" fill="${c.suave}">${xml(l)}</text>`);
+    for (const l of quebrar(d.texto, 38)) {
+      partes.push(`<text x="${MARGEM}" y="${y}" font-size="40" fill="${c.suave}">${xml(l)}</text>`);
       y += 56;
     }
   }
   if (d.lista) {
     y += 24;
     for (const item of d.lista) {
-      const linhas = quebrar(item, 38);
-      partes.push(`<circle cx="118" cy="${y - 12}" r="22" fill="${c.destaque}"/><path d="M107 ${y - 12}l8 8 15-16" fill="none" stroke="${c.fundo}" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>`);
+      const linhas = quebrar(item, 34);
+      partes.push(`<circle cx="${MARGEM + 22}" cy="${y - 12}" r="22" fill="${c.destaque}"/><path d="M${MARGEM + 11} ${y - 12}l8 8 15-16" fill="none" stroke="${c.fundo}" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>`);
       for (const l of linhas) {
-        partes.push(`<text x="166" y="${y}" font-size="36" font-weight="600" fill="${c.texto}">${xml(l)}</text>`);
+        partes.push(`<text x="${MARGEM + 70}" y="${y}" font-size="36" font-weight="600" fill="${c.texto}">${xml(l)}</text>`);
         y += 46;
       }
       y += 24;
     }
   }
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1080" viewBox="0 0 1080 1080" font-family="${FONTE}">
-  <rect width="1080" height="1080" fill="${c.fundo}"/>
-  <rect x="96" y="96" width="76" height="76" rx="22" fill="${c.logo}"/>
-  <g transform="translate(110 110) scale(2)" fill="none" stroke="${c.logoIcone}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${CASA}</g>
-  <text x="196" y="149" font-size="44" font-weight="800" letter-spacing="-1" fill="${c.texto}">bookgest</text>
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${LARGURA}" height="${ALTURA}" viewBox="0 0 ${LARGURA} ${ALTURA}" font-family="${FONTE}">
+  <rect width="${LARGURA}" height="${ALTURA}" fill="${c.fundo}"/>
+  <rect x="${MARGEM}" y="${MARGEM}" width="76" height="76" rx="22" fill="${c.logo}"/>
+  <g transform="translate(${MARGEM + 14} ${MARGEM + 14}) scale(2)" fill="none" stroke="${c.logoIcone}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${CASA}</g>
+  <text x="${MARGEM + 100}" y="${MARGEM + 53}" font-size="44" font-weight="800" letter-spacing="-1" fill="${c.texto}">bookgest</text>
   ${partes.join("\n  ")}
-  <text x="96" y="990" font-size="32" font-weight="600" fill="${c.suave}">bookgest.pt</text>
-  ${total > 1 ? `<text x="984" y="990" font-size="32" font-weight="600" fill="${c.suave}" text-anchor="end">${n}/${total}</text>` : ""}
+  <text x="${MARGEM}" y="${Y_RODAPE}" font-size="32" font-weight="600" fill="${c.suave}">bookgest.pt</text>
+  ${total > 1 ? `<text x="${LARGURA - MARGEM}" y="${Y_RODAPE}" font-size="32" font-weight="600" fill="${c.suave}" text-anchor="end">${n}/${total}</text>` : ""}
 </svg>`;
 }
 

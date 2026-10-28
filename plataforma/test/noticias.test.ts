@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { PERFIL, PUBLICACOES, quebrar, svgDiapositivo } from "../src/instagram";
+import { PERFIL, PUBLICACOES, Y_RODAPE, quebrar, svgDiapositivo } from "../src/instagram";
 import { chaveTitulo, concelhosNaNoticia, eImportante, lerRss, temasDe } from "../src/noticias";
 
 const RSS = `<rss><channel><item><title>Tomar começa a cobrar taxa turística de dois euros &amp; mais - SAPO</title>
@@ -45,9 +45,9 @@ describe("instagram", () => {
       const svg = svgDiapositivo(d);
       expect(svg.startsWith("<svg")).toBe(true);
       expect(svg).not.toMatch(/&(?!amp;|lt;|gt;|quot;)/);
-      // O texto não pode chegar ao rodapé (bookgest.pt, em y = 990).
-      const ys = [...svg.matchAll(/<text x="(?:96|166)" y="(\d+)"/g)].map((m) => Number(m[1])).filter((y) => y !== 990);
-      expect(Math.max(...ys), d.titulo).toBeLessThan(930);
+      // O texto não pode chegar ao rodapé (bookgest.pt).
+      const ys = [...svg.matchAll(/<text x="\d+" y="(\d+)"/g)].map((m) => Number(m[1])).filter((y) => y !== Y_RODAPE);
+      expect(Math.max(...ys), d.titulo).toBeLessThan(Y_RODAPE - 70);
     }
   });
 });

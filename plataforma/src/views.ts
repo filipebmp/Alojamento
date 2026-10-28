@@ -45,7 +45,7 @@ export function pagina(
   ${opcoes.descricao ? html`<meta name="description" content="${opcoes.descricao}">` : ""}
   ${opcoes.gestao ? html`<meta name="robots" content="noindex">` : ""}
   <link rel="icon" href="/icon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="/site.css?v=8">
+  <link rel="stylesheet" href="/site.css?v=9">
   ${opcoes.stripeJs ? html`<script src="https://js.stripe.com/dahlia/stripe.js"></script>` : ""}
 </head>
 <body>

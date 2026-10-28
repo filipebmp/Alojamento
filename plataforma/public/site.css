@@ -223,7 +223,7 @@ code { font-size: .85rem; }
 .sobre-pub .etiqueta { font-weight: 700; padding: 0 9px; border-radius: 999px; background: var(--marca); color: #fff; }
 .diapositivos { display: flex; gap: 12px; overflow-x: auto; scroll-snap-type: x mandatory; padding-bottom: 6px; }
 .diapositivos figure { margin: 0; flex: 0 0 min(78%, 300px); scroll-snap-align: start; display: grid; gap: 6px; justify-items: start; }
-.diapositivos img { width: 100%; aspect-ratio: 1; border-radius: 12px; border: 1px solid var(--borda); }
+.diapositivos img { width: 100%; aspect-ratio: 4 / 5; border-radius: 12px; border: 1px solid var(--borda); }
 
 /* ---------- Páginas legais ---------- */
 .legal-nav { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
