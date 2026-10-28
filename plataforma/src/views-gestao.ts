@@ -130,11 +130,19 @@ document.addEventListener("click", async (e) => {
   const guardar = e.target.closest("[data-guardar]");
   if (!guardar) return;
   const img = guardar.parentElement.querySelector("img");
+  // Lê o tamanho do próprio SVG e desenha-o ao dobro (ex.: 2160×2700): o Safari pode rasterizar o SVG ao tamanho em
+  // que aparece no ecrã, e com mais resolução o texto fica nítido depois de o Instagram reduzir para 1080 px.
+  const prefixo = "data:image/svg+xml;charset=utf-8,";
+  let svg = decodeURIComponent(img.src.slice(prefixo.length));
+  const largura = Number(svg.match(/width="(\\d+)"/)[1]);
+  const altura = Number(svg.match(/height="(\\d+)"/)[1]);
+  const escala = 2;
+  svg = svg.replace(/width="\\d+" height="\\d+"/, 'width="' + largura * escala + '" height="' + altura * escala + '"');
   const canvas = document.createElement("canvas");
-  canvas.width = img.naturalWidth || 1080;
-  canvas.height = img.naturalHeight || 1080;
-  const fonte = new Image();
-  fonte.src = img.src;
+  canvas.width = largura * escala;
+  canvas.height = altura * escala;
+  const fonte = new Image(canvas.width, canvas.height);
+  fonte.src = prefixo + encodeURIComponent(svg);
   await fonte.decode();
   canvas.getContext("2d").drawImage(fonte, 0, 0, canvas.width, canvas.height);
   const blob = await new Promise((r) => canvas.toBlob(r, "image/png"));
