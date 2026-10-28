@@ -21,7 +21,8 @@ describe("notícias", () => {
   });
 
   it("compara os concelhos com a tabela de taxas", () => {
-    expect(concelhosNaNoticia("Tomar começa a cobrar taxa turística")).toEqual([{ nome: "Tomar", valorCents: null }]);
+    expect(concelhosNaNoticia("Tomar começa a cobrar taxa turística")).toEqual([{ nome: "Tomar", valorCents: 200 }]);
+    expect(concelhosNaNoticia("Lajes do Pico abre consulta pública para criar taxa turística")).toEqual([{ nome: "Lajes do Pico", valorCents: null }]);
     expect(concelhosNaNoticia("Aumento da taxa turística no Porto Santo")).toEqual([{ nome: "Porto Santo", valorCents: 200 }]);
     expect(concelhosNaNoticia("Lajes do Pico abre consulta pública").map((c) => c.nome)).toEqual(["Lajes do Pico"]);
   });

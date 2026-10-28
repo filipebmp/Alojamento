@@ -109,6 +109,10 @@ const TAXAS: Record<string, Linha> = {
   Almada: [200, 5, 13],
   Sesimbra: [200, 7, 13],
   Nazaré: [100, 5, 12, null, undefined, undefined, "Maiores de 65 anos isentos: retire-os do cálculo."],
+  Tomar: [200, 5, 13, null, undefined, undefined,
+    "Cobrada desde 1/11/2026. Isentos, entre outros: pessoas com incapacidade ≥ 60% (e até 2 acompanhantes), antigos combatentes e peregrinos: retire-os do cálculo."],
+  Esposende: [200, 5, 16, 150, 4, 9,
+    "Cobrança a partir do final de novembro de 2026 (confirme a data). Residentes no concelho e deslocações por motivos de saúde isentos."],
   // Madeira
   Funchal: [200, 7, 13],
   "Santa Cruz": [200, 7, 13],

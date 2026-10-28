@@ -88,7 +88,7 @@ describe("tabela dos concelhos", () => {
   it("tem os 308 concelhos, sem repetidos, e as regras de referência", () => {
     expect(CONCELHOS).toHaveLength(308);
     expect(new Set(CONCELHOS.map((c) => c.nome)).size).toBe(308);
-    expect(CONCELHOS.filter((c) => c.tmt)).toHaveLength(49);
+    expect(CONCELHOS.filter((c) => c.tmt)).toHaveLength(51);
     expect(CONCELHOS.find((c) => c.nome === "Lisboa")).toMatchObject({ regiao: "continente", tmt: { valorPorNoiteCents: 400, maxNoites: 7, idadeMinima: 13, valorBaixaCents: null } });
     expect(CONCELHOS.find((c) => c.nome === "Loulé")?.tmt).toMatchObject({ valorPorNoiteCents: 200, valorBaixaCents: 100, altaInicio: 4, altaFim: 10 });
     expect(CONCELHOS.find((c) => c.nome === "Funchal")?.regiao).toBe("madeira");
